@@ -38,6 +38,10 @@ ATUS_ZMM_GEO = PROCESADOS / "atus_zmm_geo.parquet"
 ATUS_ZMM_LIMPIO = PROCESADOS / "atus_zmm_limpio.parquet"
 ATUS_ZMM_LIMPIO_GEO = PROCESADOS / "atus_zmm_limpio_geo.parquet"
 
+# Salida de geostats.modelo: el posterior del modelo jerárquico en el formato
+# que consume la app web (ver docs/app_web.md).
+APP_DATOS = PROCESADOS / "app"
+
 
 def procesado(nombre: str) -> Path:
     """Ruta a un archivo derivado, creando `data/processed/` si hace falta."""

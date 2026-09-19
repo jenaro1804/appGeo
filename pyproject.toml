@@ -27,6 +27,7 @@ dependencies = [
 consolidar-atus = "geostats.consolidar:main"
 zona-atus = "geostats.zonas:main"
 limpiar-atus = "geostats.limpieza:main"
+exportar-app = "geostats.modelo:main"
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]
