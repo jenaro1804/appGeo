@@ -24,7 +24,18 @@ uv run zona-atus --geo               # además atus_zmm_geo.parquet
 ```
 
 `zona-atus` depende de que `consolidar-atus` haya corrido antes. No hay tests
-ni linter configurados.
+ni linter configurados en el lado de Python.
+
+**App web** (`app/`, Next.js 16): muestra el posterior del modelo jerárquico.
+Estado, decisiones y pendientes en `docs/app_web.md` — leerlo antes de tocarla.
+
+```bash
+uv run limpiar-atus --geo            # → atus_zmm_limpio_geo.parquet (lo usa el modelo)
+uv run exportar-app                  # ajusta el modelo (~10 min de MCMC) → data/processed/app/
+uv run exportar-app --reusar         # solo reescribe los archivos, desde el posterior.npz guardado
+cd app && npm run dev                # la app en localhost:3000 (copia los datos a public/datos/)
+cd app && npm test                   # pruebas de la aritmética (contra numpy) y del estado
+```
 
 Si `import geostats` falla (uv + Python 3.14 en macOS deja el `.pth` oculto y
 Python lo ignora en silencio):
@@ -44,7 +55,9 @@ src/geostats/
   consolidar.py  raw → parquet nacional; validaciones; escribir_geoparquet()
   zonas.py       recorte a la ZMM (usa consolidar.escribir_geoparquet para --geo)
   espacial.py    rejilla hexagonal, CRS métrico (UTM 14N) y celdas(): la partición común de análisis y modelo
+  modelo.py      ajusta el modelo jerárquico sobre 2019-2024 y exporta el posterior para la app
 notebooks/       consumen processed/ vía `from geostats import rutas, zonas`
+app/             app web en Next.js; lee data/processed/app/ (ver docs/app_web.md)
 docs/            diccionario de datos, selección de variables y el PDF de cada notebook
 docs/reporte/    reporte técnico en LaTeX (latexmk -pdf reporte.tex); figuras/ se extraen del HTML de los notebooks
 data/            fuera del repo salvo .gitkeep (~5 GB)
