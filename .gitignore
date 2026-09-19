@@ -137,3 +137,8 @@ docs/reporte/*.toc
 docs/reporte/*.fls
 docs/reporte/*.fdb_latexmk
 docs/reporte/*.synctex.gz
+
+# ---------------------------------------------------------------
+# App web (app/): tiene su propio .gitignore (node_modules, .next,
+# public/datos, la referencia de las pruebas).
+# ---------------------------------------------------------------

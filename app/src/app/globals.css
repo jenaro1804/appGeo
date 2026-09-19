@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+/* Diseño provisional: es el de la primera versión (Vite), portado tal cual.
+   Se rehace en la siguiente etapa; ver docs/app_web.md, «Pendientes». */
+
+/* Maqueta fija de 1920×1080 que se escala a la pantalla (ver Escena en
+   components/Explorador.tsx): en el proyector todo queda exactamente donde se ensayó. Tamaños
+   pensados para leerse desde la última fila. */
+
+:root {
+  --datos: #005991;
+  --datos3: #4195d9;
+  --enfasis: #8b2c1a;
+  --texto: #2c2c2c;
+  --fondo2: #f2f2f2;
+  --titulos: var(--font-montserrat), "Segoe UI", system-ui, sans-serif;
+  --cifras: var(--font-roboto-mono), Consolas, monospace;
+  --serif: var(--font-cormorant), Georgia, serif;
+}
+
+* { box-sizing: border-box; margin: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #fff;
+  color: var(--texto);
+  font-family: var(--titulos);
+}
+
+#escena {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  transform-origin: 0 0;
+  display: grid;
+  grid-template-columns: 1040px 1fr;
+  /* minmax(0, …): el panel nunca empuja el pie fuera de la pantalla. */
+  grid-template-rows: minmax(0, 1fr) 170px;
+}
+
+/* --- Mapa --------------------------------------------------------------- */
+
+#mapa-caja { position: relative; overflow: hidden; }
+#mapa { display: block; }
+
+#insignia {
+  position: absolute;
+  top: 28px;
+  left: 32px;
+  font: 700 34px var(--titulos);
+  letter-spacing: 0.12em;
+  padding: 8px 20px;
+  border: 3px solid currentColor;
+  opacity: 0;
+  transition: opacity 300ms;
+}
+#insignia.visible { opacity: 1; }
+#insignia.antes { color: var(--texto); }
+#insignia.despues { color: var(--enfasis); }
+
+#pregunta {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 32px;
+  padding: 80px;
+  background: rgba(255, 255, 255, 0.86);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms;
+}
+#pregunta.visible { opacity: 1; }
+#pregunta p {
+  font: italic 600 72px/1.12 var(--serif);
+  text-align: center;
+  color: var(--enfasis);
+}
+#pregunta span { font: 500 22px var(--titulos); opacity: 0.45; }
+
+/* --- Panel -------------------------------------------------------------- */
+
+#panel {
+  padding: 40px 56px 0 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.titular { display: flex; align-items: baseline; gap: 28px; }
+#anio { font: 700 120px/1 var(--titulos); color: var(--texto); letter-spacing: -0.02em; }
+#etapa { font: 700 30px var(--titulos); letter-spacing: 0.14em; color: var(--datos); }
+#etapa.proyeccion { color: var(--enfasis); }
+
+#lente { font: 500 29px/1.25 var(--titulos); margin-top: 8px; min-height: 73px; }
+
+#cifra { font: 500 100px/1 var(--cifras); color: var(--datos); margin-top: 18px; letter-spacing: -0.03em; }
+#cifra-sub { font: 500 29px var(--titulos); margin-top: 8px; min-height: 36px; }
+#cifra-sub .mono { font-family: var(--cifras); }
+
+#frase { font: 500 30px/1.3 var(--titulos); margin-top: 22px; min-height: 78px; }
+#frase strong { color: var(--enfasis); font-weight: 700; }
+
+#serie { width: 100%; height: 250px; flex: none; margin-top: 12px; overflow: visible; }
+#serie .eje { font: 500 21px var(--cifras); fill: var(--texto); }
+#serie .desborde { font: 700 20px var(--cifras); fill: var(--datos); }
+
+#escenario { font: 700 29px/1.25 var(--titulos); color: var(--enfasis); margin-top: 10px; }
+
+/* --- Pie ---------------------------------------------------------------- */
+
+#pie {
+  grid-column: 1 / 3;
+  display: grid;
+  grid-template-columns: 1fr 520px;
+  grid-template-rows: 1fr auto;
+  align-items: center;
+  padding: 0 56px 18px 40px;
+  column-gap: 48px;
+  border-top: 3px solid var(--fondo2);
+}
+
+#anios { display: flex; gap: 10px; }
+#anios button {
+  font: 700 32px var(--cifras);
+  padding: 12px 18px;
+  border: 3px solid transparent;
+  background: none;
+  color: var(--texto);
+  cursor: pointer;
+  border-radius: 6px;
+}
+#anios button.proy { color: var(--enfasis); font-style: italic; }
+#anios button.activo { border-color: currentColor; background: var(--fondo2); }
+#anios .separador { width: 3px; background: var(--fondo2); margin: 6px 12px; }
+
+#leyenda-titulo { font: 500 22px var(--titulos); margin-bottom: 8px; }
+#leyenda-barra { height: 26px; border-radius: 3px; }
+#leyenda-marcas { position: relative; height: 30px; font: 500 20px var(--cifras); }
+#leyenda-marcas span { position: absolute; top: 4px; transform: translateX(-50%); }
+
+#aviso { grid-column: 1 / 3; font: 500 20px var(--titulos); opacity: 0.6; }
+
+/* --- Superposiciones ---------------------------------------------------- */
+
+#ayuda {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 3px solid var(--texto);
+  padding: 40px 56px;
+  display: none;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+#ayuda.visible { display: block; }
+#ayuda h2 { font: 700 34px var(--titulos); margin-bottom: 20px; }
+#ayuda dl { display: grid; grid-template-columns: auto 1fr; gap: 12px 36px; font-size: 26px; }
+#ayuda dt { font-family: var(--cifras); font-weight: 500; color: var(--datos); }
+
+#tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: #fff;
+  border: 2px solid var(--texto);
+  padding: 14px 20px;
+  font: 500 24px/1.35 var(--titulos);
+  display: none;
+  max-width: 460px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+#tooltip b { font-weight: 700; }
+#tooltip .mono { font-family: var(--cifras); }
+
+.mensaje { font: 500 28px var(--titulos); padding: 48px; }
+.mensaje.error { color: var(--enfasis); }
