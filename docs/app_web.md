@@ -4,13 +4,14 @@ Documento de continuidad: qué se está construyendo, qué decisiones ya se
 tomaron y por qué, y qué falta. Escrito para que otra sesión pueda retomar sin
 contexto previo.
 
-Última actualización: 2026-09-18 (noche).
+Última actualización: 2026-09-19.
 
-**Dónde quedó:** la app funciona en Next.js (`app/`) con el diseño provisional
-de la primera versión. **Al autor no le gustó el diseño**; la siguiente sesión
-empieza por el rediseño (él trae *skills* de diseño) y por las decisiones de
-[«Pendientes»](#pendientes-para-la-siguiente-sesión). Nada de `app/` está en
-un commit todavía.
+**Dónde quedó:** el rediseño está implementado (shadcn/ui, mapa a pantalla
+completa, interruptor de proyección, guía «Cómo leer esto») y encima un **mapa base de calles** con zoom y arrastre, sin
+internet. Todo **sin commit y sin que el autor lo haya visto a pantalla
+completa**. Lo siguiente: que lo revise en el proyector, ajustar, hacer el
+commit y resolver los datos del deploy (ver
+[«Pendientes»](#pendientes-para-la-siguiente-sesión)).
 
 ## Qué se quiere
 
@@ -30,8 +31,8 @@ del proyecto, pero se decidió hacerlo.
 De ahí se derivan las restricciones:
 
 - **Legibilidad de proyector.** Se lee desde la última fila: tipografía
-  grande, trazos gruesos, mucho contraste, pocos elementos por pantalla. Si
-  además debe verse en celular está **pendiente de decidir**.
+  grande, trazos gruesos, mucho contraste, pocos elementos por pantalla. En
+  celular basta con que se apile y funcione.
 - **El operador es experto.** No hace falta proteger la interfaz de un
   desconocido con prisa; los controles pueden ser densos en información.
 - **El momento de revelar es el producto.** La transición entre estados tiene
@@ -52,6 +53,61 @@ HTML de un solo archivo que funcionaba sin servidor; el autor prefirió Next.js
 (`npm start`) o un deploy. La página se prerenderiza estática y todo el cálculo
 ocurre en el cliente. El mapa es un `<canvas>` (2,241 hexágonos animados) y la
 serie un SVG, ambos como clases imperativas envueltas en React.
+
+**Interfaz con shadcn/ui (base Base UI, estilo nova) sobre Tailwind 4.** Los
+tokens de shadcn están mapeados a los colores del manual en `globals.css`
+(`--primary` = `#005991`, `--chart-*` = la rampa ordinal). Se agregó una variante propia de `Toggle`, `marca`: la opción elegida
+va en azul lleno, porque el `bg-muted` de fábrica no se distingue desde el
+fondo de la sala.
+
+**Tamaño fluido en rem.** Todo está en rem y el rem de `<html>` crece con la
+pantalla (`min(1.04vw, 1.85vh)`, 20 px a 1920×1080; 16 px fijos en celular).
+Reemplaza a la maqueta fija de 1920×1080 escalada: en cualquier pantalla
+16:9 todo queda en el mismo lugar relativo, y el mapa ocupa el hueco real.
+La tarjeta de la izquierda se midió para que su estado más largo quepa en
+54 rem de alto (16:9) sin scroll; si se le agrega texto, volver a medirla.
+
+**Sin tema oscuro (decidido 2026-09-19).** Se implementó y el autor lo
+descartó: no servía para proyectar. Se quitó todo (botón, tecla T, tokens
+`.dark`, paleta oscura del mapa). En `globals.css` queda la variante `dark`
+atada a una clase que nunca se pone, para que los `dark:` de los componentes
+de shadcn no se activen con el modo oscuro del sistema.
+
+**Mapa base de calles, guardado dentro de la app.** Debajo de los
+hexágonos hay un mapa de OpenStreetMap con zoom y arrastre, como un mapa
+web, para ver qué calles y cruces caen en cada hexágono. Decisiones:
+
+- **MapLibre GL** dibuja el mapa base; los hexágonos siguen en el canvas
+  propio (`lib/mapa.ts`), que copia la cámara de MapLibre. Sin rotación ni
+  inclinación, mover y hacer zoom en Web Mercator es escalar y trasladar: los
+  hexágonos se construyen una vez y cada cuadro solo cambia la
+  transformación. Así se conservan intactas las animaciones, el top N, los
+  contornos del escenario y el tooltip.
+- **Sin internet:** los mosaicos son un recorte de Protomaps solo de la ZMM
+  (`public/mapa/zmm.pmtiles`, 25 MB, zoom 0-15; más allá de 15 MapLibre
+  amplía los del 15). Las tipografías del mapa (Noto Sans, solo los rangos
+  latinos) y los íconos (del sabor `grayscale`) también están en
+  `public/mapa/`. Cómo regenerarlo: ver «Mapa base» más abajo.
+- **Sabor propio, gris claro** (`CLARO` en `lib/mapaBase.ts`): el
+  `grayscale` de Protomaps con la tierra en el `#F2F2F2` del manual, calles
+  blancas con borde gris suave y los rótulos con su contraste de fábrica. El
+  `grayscale` tal cual (tierra `#CCCCCC`) se veía demasiado gris.
+- **Controles:** columna a la derecha con acercar, alejar, encuadrar la ZMM,
+  mostrar u ocultar las calles, y un deslizador de opacidad de los
+  hexágonos (en 0 % solo quedan calles, contornos y rótulos). Ocultar los
+  hexágonos no lleva botón aparte: el deslizador ya lo hace. Teclas: + −, E,
+  B, H.
+- **Los UTM se convierten en el cliente** (`lib/geo.ts`, UTM inversa sin
+  dependencias), no en el export: el contrato de datos no cambió. La fórmula
+  coincide con pyproj a menos de 1e-9° (prueba en `pruebas/geo.test.ts`).
+- **Atribución:** la licencia de OpenStreetMap pide citarla mientras se ve el
+  mapa; va en la leyenda y desaparece si se ocultan las calles.
+
+**Dos modelos en memoria, uno por forma de proyectar.** «Si nada cambia»
+(persistencia, `innovaciones: false`) es el estado inicial, porque es lo que
+validó el notebook; «si cambia el reporte» (innovaciones *t*) es la
+revelación. En 2019-2024 dan exactamente lo mismo. El eje de la serie es
+común a los dos, para que el cambio se vea como cambio de datos.
 
 **Ajuste con los seis años (2019-2024), no con la partición del notebook.** El
 notebook entrena con 2019-2023 y reserva 2024 para validar; esa pregunta ya se
@@ -161,35 +217,75 @@ npm run lint         # ESLint
 ```
 
 `npm start` no necesita internet: `next/font` descarga las tipografías al
-compilar y las sirve la propia app.
+compilar y las sirve la propia app, y el mapa base sale de `public/mapa/`.
+`predev`/`prebuild` también copian el worker de MapLibre a
+`public/mapa/maplibre/` (`scripts/copiar-maplibre.mjs`).
 
 Teclado (también con `?` dentro de la app): ← → año · Inicio/Fin 2019/2027 ·
-N crudo↔neto · ↑↓ top 1-20 % · 1-4 escenario preparado (pregunta) · Espacio
-revelar · F fijar «antes» · A alternar antes/después · M nombres · 0/Esc
-volver al inicio. Mouse sobre un hexágono: sus cifras.
+N accidentes↔riesgo · P proyección · ↑↓ top 1-20 % · 1-5 escenario preparado
+(pregunta) · Espacio revelar · F fijar «antes» · A alternar antes/después ·
+M nombres · + − acercar/alejar · E encuadrar · B calles · H opacidad de los
+hexágonos · L cómo leer esto · 0/Esc volver al inicio. Mouse sobre
+un hexágono: sus cifras; rueda y arrastre: mover el mapa; clic en una columna
+de la serie: ese año. Todo lo del teclado tiene también botón en pantalla,
+salvo F y M.
+
+### Mapa base
+
+Lo que hay en `public/mapa/` y cómo se regenera (por ejemplo, para
+actualizar las calles):
+
+```bash
+# CLI oficial de Protomaps: https://github.com/protomaps/go-pmtiles/releases (se usó la v1.31.2)
+pmtiles extract https://build.protomaps.com/20260919.pmtiles app/public/mapa/zmm.pmtiles \
+  --bbox=-100.78,25.28,-99.72,26.40 --maxzoom=15
+# Las compilaciones disponibles están en https://build-metadata.protomaps.dev/builds.json
+```
+
+- El recorte es la extensión de los hexágonos (`celdas.json`) más 0.05°.
+- `fonts/` y `sprites/` vienen de
+  `https://protomaps.github.io/basemaps-assets/` (`fonts/<fuente>/<rango>.pbf`,
+  `sprites/v4/grayscale[@2x].{json,png}`). Solo se bajaron los rangos latinos
+  (0-1023, 7680-7935, 8192-8959) de Noto Sans Regular, Medium e Italic: un
+  nombre con otro alfabeto no se rotularía.
+- El estilo lo arma `@protomaps/basemaps` en el cliente (`lib/mapaBase.ts`);
+  su versión debe corresponder a la del recorte (la 4.x del recorte con la
+  5.x del paquete funciona).
+
+El teclado se escucha en captura: aunque el foco haya quedado en un botón
+tras un clic, las flechas y el espacio siguen siendo del presentador. Con un
+diálogo, la guía o el menú de escenarios abiertos, el teclado es de ellos.
 
 ## Estructura de `app/`
 
 ```
 app/
-  src/app/            layout.tsx (fuentes, metadatos), page.tsx, globals.css (estilos provisionales)
-  src/components/     Explorador.tsx: carga, escena 1920×1080 escalada, panel, teclado, tooltip
+  src/app/            layout.tsx (fuentes, metadatos), page.tsx, globals.css (tokens del manual, serie)
+  src/components/     Explorador.tsx: carga, distribución, controles, teclado
+                      Piezas.tsx: cifra, leyenda, tooltip, ayuda de teclado, guía «Cómo leer esto»
+                      ui/: componentes de shadcn (se agregan con `npx shadcn@latest add`)
+  public/mapa/        mapa base sin internet: zmm.pmtiles, fonts/, sprites/ (y maplibre/, copiado)
   src/lib/
     modelo.ts         aritmética del posterior (lo importante; probado contra numpy)
     estado.ts         estado de la escena y sus transiciones (función pura, probada)
     escenarios.ts     escenarios preparados: DATOS, se editan sin tocar lógica
     datos.ts          contrato de datos y carga (fetch de public/datos/)
     azar.ts           PRNG con semilla, normal, t de Student
-    color.ts          rampa del manual interpolada en OKLab
+    color.ts          paleta del mapa: rampa del manual interpolada en OKLab
+    geo.ts            UTM 14N → grados → Mercator, para montar los hexágonos en el mapa base
+    mapaBase.ts       MapLibre: estilo local, límites, encuadre, cámara
     mapa.ts, serie.ts canvas de hexágonos y SVG de la serie, con animación
+    utils.ts          cn() de shadcn
   scripts/copiar-datos.mjs   data/processed/app/ → public/datos/ (predev, prebuild)
-  pruebas/            modelo.test.ts, estado.test.ts, referencia.py (numpy)
+  scripts/copiar-maplibre.mjs  worker de MapLibre → public/mapa/maplibre/ (predev, prebuild)
+  pruebas/            modelo.test.ts, estado.test.ts, geo.test.ts, referencia.py (numpy)
   AGENTS.md, CLAUDE.md  los genera Next: avisan que Next 16 cambió y que hay que
                         leer node_modules/next/dist/docs/ antes de escribir código
 ```
 
-Tailwind 4 está instalado (viene con `create-next-app`) pero los estilos
-actuales son CSS plano por id. El rediseño puede usarlo.
+`components.json` es la configuración de shadcn. Antes de agregar o cambiar
+componentes, la skill de shadcn pide correr `npx shadcn@latest info` y leer
+la documentación del componente (`npx shadcn@latest docs <componente>`).
 
 ## Estado actual
 
@@ -205,7 +301,7 @@ Hecho:
   notebook: no se identifican por separado y no se leen solos. Hiperparámetros
   iguales a los del notebook (α 0.843, σ_rw 0.28, θ 12.05).
 - El export calcula R̂/ESS de log μ antes de aplanar las cadenas y agrega
-  `x`/`y` UTM y `contornos.json` (commit pendiente: `src/geostats/modelo.py`).
+  `x`/`y` UTM y `contornos.json`.
 - App en Next.js: mapa crudo/neto, años 2019-2027 con proyección, top N % con
   frase de concentración, serie con banda del 90 % (recortada arriba con
   etiqueta «↑225 mil»), escenarios con pregunta → revelar, antes/después,
@@ -217,15 +313,39 @@ Hecho:
   build de producción: carga, primer dibujo, y el flujo completo por teclado
   (pregunta, revelar, alternar, años, top 5 %, neto, ayuda, reinicio) leyendo
   el DOM.
-- **No verificado visualmente:** las animaciones. La pestaña de Chrome que
-  usaba la automatización quedaba oculta (`visibilityState: hidden`) y Chrome
-  pausa `requestAnimationFrame` en pestañas ocultas. Revisarlas a ojo.
+- **Rediseño (2026-09-19)**, sin commit. Mapa a pantalla completa con los
+  controles flotando: arriba «Accidentes | Riesgo» y los botones (escenarios,
+  guía, teclado, reinicio); abajo años, «Resaltar» y leyenda. A la
+  izquierda, una tarjeta con año, cifra, frase explicativa, serie e
+  interruptor de proyección con su explicación. El aviso del escenario
+  (con Antes/Después y Quitar) flota sobre la esquina del mapa y no lo mueve
+  al revelar. Rótulos de municipios sin encimarse (ganan los del escenario y
+  los de más accidentes). Respeta «reducir movimiento» del sistema.
+- **Verificado del rediseño:** 29 pruebas (9 nuevas del estado: proyección,
+  controles directos, quitar escenario), `lint` y `build` limpios. En Chrome
+  a 1920×855, con el servidor de desarrollo: los cinco escenarios, revelar,
+  antes/después, riesgo con top N, proyección con y sin innovaciones,
+  tooltip, menú de escenarios, guía, ayuda; nada se sale de la
+  pantalla; la tarjeta cabe en todos los estados medidos. En un iframe de
+  400 px: se apila sin scroll horizontal.
+- **Mapa base (2026-09-19)**, sin commit. Verificado en Chrome: las calles
+  se dibujan desde el recorte local, los hexágonos caen sobre ellas (el
+  contorno Monterrey–San Pedro sigue el río Santa Catarina), el zoom con
+  botones y teclado se conserva al cambiar el tamaño de la ventana, E
+  reencuadra, B oculta las calles, H y el deslizador transparentan los
+  hexágonos, tooltip con zoom. Después se aclaró el mapa base y se quitó el
+  tema oscuro; con los hexágonos al 60 % se leen los nombres de las calles. 32 pruebas,
+  `lint` y `build` limpios.
+- **No verificado visualmente:** las animaciones, otra vez. La pestaña de la
+  automatización queda oculta y Chrome pausa `requestAnimationFrame`; los
+  estados finales se revisaron simulando «reducir movimiento». Revisarlas a
+  ojo, igual que el tamaño real a 1920×1080 en el proyector.
 
 ## Pendientes para la siguiente sesión
 
 Decisiones del autor (en este orden):
 
-1. **Rediseño.** No le gustó el diseño actual (ni el frontend en general).
+1. ~~**Rediseño.**~~ Implementado; falta que el autor lo revise. No le gustó el diseño anterior (ni el frontend en general).
    Falta saber qué no le gustó: distribución (mapa chico a la izquierda y
    panel a la derecha vs mapa a pantalla completa), estilo, colores, cantidad
    de información, referencias. Trae *skills* de diseño.
@@ -238,8 +358,8 @@ Decisiones del autor (en este orden):
    **Decidido (2026-09-19), dirección del rediseño:**
    - Mapa a pantalla completa; cifra, serie, escenarios y controles flotan
      encima en tarjetas. Arriba, un selector visible «Accidentes | Riesgo».
-   - Tema claro y oscuro con interruptor (claro por defecto). Los colores de
-     datos se revalidan sobre el fondo oscuro.
+   - ~~Tema claro y oscuro con interruptor.~~ Implementado y descartado: se
+     quitó el tema oscuro.
    - Proyector primero; en celular basta con que se apile y funcione.
    - Texto explicativo visible (frases guía como la de concentración), pensando
      también en quien la use sola en la web.
@@ -257,27 +377,37 @@ Decisiones del autor (en este orden):
    (innovaciones), como revelación en vivo. `Modelo` ya acepta
    `{ innovaciones: false }`; basta una segunda instancia (con K = 1 es
    barata). El texto de la mediana creciente sigue haciendo falta en el modo
-   con innovaciones.
+   con innovaciones. **Implementado.**
 3. ~~**¿Usable en celular?**~~ Decidido: proyector primero (ver 1).
 4. **Datos para el deploy.** Vercel construye desde git y `data/` está fuera
    de git. Opciones: versionar `app/public/datos/` (~3 MB de datos públicos;
    recomendado: el script ya usa esos archivos si `data/processed/app/` no
    existe) o publicar desde la laptop con la CLI de Vercel. Hoy
    `public/datos/` está en `app/.gitignore`.
-5. **Sección «cómo leer esto»** para la versión pública: límites del modelo y
-   enlace al reporte técnico, para que una captura fuera de contexto no diga
-   más de lo que el modelo sabe.
+5. ~~**Sección «cómo leer esto»**~~ Implementada como panel lateral (botón y
+   tecla L), con los límites de «Lo que la app no debe afirmar». Falta el
+   **enlace** al reporte técnico: hoy solo lo menciona, porque el PDF vive en
+   el repo y no hay URL pública todavía.
+
+6. **¿Los 26 MB de `public/mapa/` van al repo?** Sin ellos la app no tiene
+   calles, y regenerarlos requiere internet y el CLI de Protomaps. GitHub
+   los acepta (el límite duro es 100 MB por archivo); Vercel también. La
+   recomendación es versionarlos junto con la decisión 4.
 
 Trabajo:
 
-- Rediseño e implementación.
-- Revisar a ojo las animaciones y el tooltip.
+- **Segundo paso del mapa (decidido):** con mucho zoom, mostrar los
+  accidentes reales del año elegido como puntos (`LONGITUD`/`LATITUD` de
+  `atus_zmm_limpio_geo.parquet`, unos 70 mil por año). Es lo que deja ver
+  los cruces; el hexágono solo dice qué calles caen dentro. Requiere un
+  archivo nuevo en el export y decidir desde qué zoom aparecen.
+- Revisión del autor del rediseño a pantalla completa, y ajustes.
+- Revisar a ojo las animaciones.
 - Ajustar los escenarios de `app/src/lib/escenarios.ts` a lo que se vaya a
   contar (hoy: Guadalupe como en 2021, Santa Catarina como en 2020, periferia
-  norte al doble, 2027 sin cambios).
+  norte al doble, 2027 si nada cambia, 2027 si cambia el reporte).
 - Deploy en Vercel.
-- Commits: `src/geostats/modelo.py` (contornos y UTM), `.gitignore`, este
-  documento y todo `app/`.
+- Commit del rediseño: `app/` y este documento.
 
 ## Historial de tropiezos, para no repetirlos
 
@@ -310,6 +440,29 @@ cualquier diagnóstico por cadena (R̂) se calcula antes de guardarlo.
 - `vitest` pide `@types/node` ≥ 22; `create-next-app` trae la 20. Se subió a 24.
 - Chrome pausa `requestAnimationFrame` en pestañas ocultas: si una captura se
   cuelga o una animación «no avanza», revisar `document.visibilityState`.
+  Para revisar estados finales desde la automatización, sustituir
+  `window.matchMedia` para que «reduced-motion» dé `true`: la app lo consulta
+  en cada cambio y entonces no anima.
+- Crear el `Mapa` en un efecto y medirlo en otro rompía con Strict Mode y la
+  recarga en caliente: se llegaba a dibujar un `Mapa` sin medir y el canvas
+  lanzaba «parameter 1 is not of type 'Path2D'». Ahora se crean y miden en el
+  mismo efecto, y `dibujar()` no hace nada si aún no hay tamaño.
+- **MapLibre 6 no encuentra su worker dentro del bundle de Next**: lo busca
+  junto a su archivo (`import.meta.url`). Síntoma: el mapa se queda en el
+  fondo gris, `isStyleLoaded()` nunca llega a `true` y no hay ningún error.
+  Solución: `scripts/copiar-maplibre.mjs` + `setWorkerUrl`.
+- **`maxBounds` de MapLibre exige que toda la pantalla quepa dentro de los
+  límites.** Con límites justos al recorte, en una pantalla ancha forzaba un
+  zoom mayor que el del encuadre y el mapa salía cortado. Los límites son
+  holgados a propósito.
+- MapLibre tampoco dibuja en una pestaña oculta. Para revisarlo desde la
+  automatización: sustituir `requestAnimationFrame` por un `setTimeout` antes
+  de que cargue el mapa y forzar `map.redraw()`.
+- MapLibre le pone `position: relative` a su contenedor; por eso el
+  contenedor del mapa va dentro de otra caja absoluta.
+- `shadcn init --preset base-nova` ya no existe; los presets se llaman `nova`,
+  `vega`, etc. (la base Base UI es la de fábrica). El `init` instala el
+  paquete `cn` (reemplazo de clsx + tailwind-merge del propio shadcn).
 
 ## Notas técnicas de la máquina
 
