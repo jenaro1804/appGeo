@@ -8,6 +8,8 @@
 // Un escenario solo actúa en proyecciones (2025-2027): es un cambio de
 // régimen de reporte hacia adelante.
 
+import type { Proyeccion } from "./estado";
+
 export interface Preset {
   tecla: string;
   pregunta: string;
@@ -20,6 +22,10 @@ export interface Preset {
   factor?: number;
   anioAntes: number;
   anio: number;
+  /** Proyección con la que se hace la pregunta y con la que se revela; si se
+   *  omiten, se queda la que esté elegida. */
+  proyeccionAntes?: Proyeccion;
+  proyeccion?: Proyeccion;
 }
 
 export const PRESETS: Preset[] = [
@@ -53,9 +59,21 @@ export const PRESETS: Preset[] = [
   {
     tecla: "4",
     pregunta: "¿Cuántos accidentes habrá en 2027 si nada cambia?",
-    etiqueta: "Sin cambios de régimen",
+    etiqueta: "Si cada municipio sigue reportando como en 2024",
     municipios: [],
     anioAntes: 2024,
     anio: 2027,
+    proyeccionAntes: "estable",
+    proyeccion: "estable",
+  },
+  {
+    tecla: "5",
+    pregunta: "¿Y si los municipios cambian cómo reportan, como ya pasó entre 2019 y 2024?",
+    etiqueta: "Los municipios pueden cambiar cómo reportan",
+    municipios: [],
+    anioAntes: 2027,
+    anio: 2027,
+    proyeccionAntes: "estable",
+    proyeccion: "cambios",
   },
 ];

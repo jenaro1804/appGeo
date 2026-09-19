@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Montserrat, Roboto_Mono } from "next/font/google";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import "./globals.css";
 
 // Tipografías de la identidad GeoStats (README, «Identidad visual»). next/font
@@ -21,8 +23,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es" className={`${montserrat.variable} ${robotoMono.variable} ${cormorant.variable}`}>
-      <body>{children}</body>
+    <html lang="es" className={cn(montserrat.variable, robotoMono.variable, cormorant.variable)}>
+      <body>
+        <TooltipProvider>{children}</TooltipProvider>
+      </body>
     </html>
   );
 }

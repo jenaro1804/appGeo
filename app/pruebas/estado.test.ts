@@ -72,3 +72,66 @@ describe("controles", () => {
     expect(vistaDe(e)).toMatchObject({ anio: 2024, lente: "neto", escenario: null });
   });
 });
+
+describe("proyección y controles visibles", () => {
+  const cambios: PresetListo = {
+    tecla: "5",
+    pregunta: "¿Y si los municipios cambian cómo reportan?",
+    etiqueta: "Los municipios pueden cambiar cómo reportan",
+    municipios: [],
+    anioAntes: 2027,
+    anio: 2027,
+    proyeccionAntes: "estable",
+    proyeccion: "cambios",
+    escenario: null,
+  };
+
+  it("arranca con la proyección que validó el notebook", () => {
+    expect(vistaDe(INICIAL).proyeccion).toBe("estable");
+  });
+
+  it("la proyección alterna, o se fija con un valor", () => {
+    expect(vistaDe(correr({ tipo: "proyeccion" })).proyeccion).toBe("cambios");
+    expect(vistaDe(correr({ tipo: "proyeccion" }, { tipo: "proyeccion" })).proyeccion).toBe("estable");
+    expect(vistaDe(correr({ tipo: "proyeccion", proyeccion: "cambios" }, { tipo: "proyeccion", proyeccion: "cambios" })).proyeccion).toBe("cambios");
+  });
+
+  it("la lente se fija con un valor sin alternar", () => {
+    expect(vistaDe(correr({ tipo: "lente", lente: "neto" }, { tipo: "lente", lente: "neto" })).lente).toBe("neto");
+  });
+
+  it("un preset puede preguntar con una proyección y revelar con otra", () => {
+    const antes = correr({ tipo: "proyeccion", proyeccion: "cambios" }, { tipo: "lanzar", preset: cambios });
+    expect(vistaDe(antes)).toMatchObject({ anio: 2027, proyeccion: "estable" });
+    const despues = reducir(antes, { tipo: "revelar" });
+    expect(vistaDe(despues)).toMatchObject({ anio: 2027, proyeccion: "cambios" });
+    expect(despues.referencia?.proyeccion).toBe("estable");
+  });
+
+  it("un preset sin proyección conserva la elegida", () => {
+    const e = correr({ tipo: "proyeccion", proyeccion: "cambios" }, { tipo: "lanzar", preset: guadalupe }, { tipo: "revelar" });
+    expect(vistaDe(e).proyeccion).toBe("cambios");
+  });
+
+  it("antes/después se elige directo, y solo si hay referencia", () => {
+    expect(correr({ tipo: "verReferencia", ver: true })).toBe(INICIAL);
+    const e = correr({ tipo: "lanzar", preset: guadalupe }, { tipo: "revelar" }, { tipo: "verReferencia", ver: true });
+    expect(vistaDe(e).escenario).toBeNull();
+    expect(vistaDe(reducir(e, { tipo: "verReferencia", ver: false })).escenario).toBe(guadalupe.escenario);
+  });
+
+  it("quitar el escenario conserva año y lente, y borra la comparación", () => {
+    const e = correr({ tipo: "lanzar", preset: guadalupe }, { tipo: "revelar" }, { tipo: "quitarEscenario" });
+    expect(e).toMatchObject({ referencia: null, pregunta: null, viendoReferencia: false });
+    expect(vistaDe(e)).toMatchObject({ anio: 2025, escenario: null, etiqueta: null });
+  });
+
+  it("quitar el escenario también cancela una pregunta pendiente", () => {
+    expect(correr({ tipo: "lanzar", preset: guadalupe }, { tipo: "quitarEscenario" }).pregunta).toBeNull();
+  });
+
+  it("el top se elige directo, dentro del rango", () => {
+    expect(correr({ tipo: "topEn", k: 3 }).top).toBe(3);
+    expect(correr({ tipo: "topEn", k: 99 }).top).toBe(5);
+  });
+});

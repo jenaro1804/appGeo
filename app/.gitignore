@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Referencia de las pruebas: la regenera `npm test`.
 /pruebas/referencia.json
+
+# Worker de MapLibre: lo copia scripts/copiar-maplibre.mjs desde node_modules.
+/public/mapa/maplibre/

@@ -1,17 +1,19 @@
 // Colores de la identidad GeoStats (README, «Identidad visual») y la rampa
 // del mapa. No se inventan tonos: la rampa interpola las paradas del manual
 // en OKLab, que reparte la luminosidad de forma pareja.
+//
+// La rampa va de #F2F2F2 al azul oscuro. Validada con el script de la skill
+// dataviz: luminosidad OKLab monótona (0.96 → 0.45).
 
-export const COLOR = {
+export const MANUAL = {
   datos: "#005991",
   datos2: "#1b77b8",
   datos3: "#4195d9",
   enfasis: "#8B2C1A",
-  texto: "#2C2C2C",
+  calido: "#B15E2E",
+  grafito: "#2C2C2C",
   fondo2: "#F2F2F2",
 };
-
-const PARADAS = [COLOR.fondo2, COLOR.datos3, COLOR.datos2, COLOR.datos];
 
 type Rgb = [number, number, number];
 
@@ -42,45 +44,60 @@ function deOklab([L, a, b]: Rgb): Rgb {
   ].map((c) => Math.min(1, Math.max(0, aSrgb(c)))) as Rgb;
 }
 
-const PARADAS_LAB = PARADAS.map((h) => aOklab(hexARgb(h)));
-
-/** Color de la rampa en t ∈ [0, 1]. */
-export function rampa(t: number): Rgb {
-  const x = Math.min(1, Math.max(0, t)) * (PARADAS_LAB.length - 1);
-  const k = Math.min(Math.floor(x), PARADAS_LAB.length - 2);
-  const f = x - k;
-  const [a, b] = [PARADAS_LAB[k], PARADAS_LAB[k + 1]];
-  return deOklab([0, 1, 2].map((c) => a[c] + f * (b[c] - a[c])) as Rgb);
-}
-
 const css = ([r, g, b]: Rgb) => `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`;
 
 /**
  * Tabla de colores precalculada: `N_T` pasos de la rampa × `N_D` niveles de
- * atenuación hacia blanco. Dibujar 2,241 hexágonos por cuadro no puede
+ * atenuación hacia el fondo. Dibujar 2,241 hexágonos por cuadro no puede
  * construir colores cada vez.
  */
 export const N_T = 96;
 export const N_D = 16;
 const ATENUACION = 0.72; // cuánto se lava una celda fuera del top N
 
-export const TABLA: string[] = (() => {
-  const t: string[] = [];
+export interface Paleta {
+  tabla: string[];
+  /** Degradado CSS de la rampa, para la leyenda. */
+  gradiente: string;
+  texto: string;
+  /** Contorno de los municipios del escenario y del top N. */
+  enfasis: string;
+  /** Halo detrás de los rótulos, para que se lean sobre cualquier celda. */
+  halo: string;
+}
+
+function crearPaleta(paradas: string[], fondo: string, texto: string, enfasis: string, halo: string): Paleta {
+  const lab = paradas.map((h) => aOklab(hexARgb(h)));
+  const rampa = (t: number): Rgb => {
+    const x = Math.min(1, Math.max(0, t)) * (lab.length - 1);
+    const k = Math.min(Math.floor(x), lab.length - 2);
+    const f = x - k;
+    const [a, b] = [lab[k], lab[k + 1]];
+    return deOklab([0, 1, 2].map((c) => a[c] + f * (b[c] - a[c])) as Rgb);
+  };
+  const f = hexARgb(fondo);
+  const tabla: string[] = [];
   for (let i = 0; i < N_T; i++) {
     const c = rampa(i / (N_T - 1));
     for (let d = 0; d < N_D; d++) {
       const w = (ATENUACION * d) / (N_D - 1);
-      t.push(css(c.map((v) => v + (1 - v) * w) as Rgb));
+      tabla.push(css(c.map((v, k) => v + (f[k] - v) * w) as Rgb));
     }
   }
-  return t;
-})();
-
-export function colorDe(t: number, atenuado: number): string {
-  const i = Math.round(Math.min(1, Math.max(0, t)) * (N_T - 1));
-  const d = Math.round(Math.min(1, Math.max(0, atenuado)) * (N_D - 1));
-  return TABLA[i * N_D + d];
+  const n = 12;
+  const gradiente = `linear-gradient(90deg, ${Array.from({ length: n }, (_, k) => css(rampa(k / (n - 1)))).join(", ")})`;
+  return { tabla, gradiente, texto, enfasis, halo };
 }
 
-export const gradienteCss = (n = 12) =>
-  `linear-gradient(90deg, ${Array.from({ length: n }, (_, k) => css(rampa(k / (n - 1)))).join(", ")})`;
+// El fondo coincide con --background de globals.css: la celda atenuada se
+// funde con la página, no con un gris ajeno.
+export const PALETA: Paleta = crearPaleta(
+  [MANUAL.fondo2, MANUAL.datos3, MANUAL.datos2, MANUAL.datos],
+  "#FFFFFF", MANUAL.grafito, MANUAL.enfasis, "rgba(255,255,255,0.9)",
+);
+
+export function colorDe(p: Paleta, t: number, atenuado: number): string {
+  const i = Math.round(Math.min(1, Math.max(0, t)) * (N_T - 1));
+  const d = Math.round(Math.min(1, Math.max(0, atenuado)) * (N_D - 1));
+  return p.tabla[i * N_D + d];
+}

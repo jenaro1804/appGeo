@@ -1,182 +1,128 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-/* Diseño provisional: es el de la primera versión (Vite), portado tal cual.
-   Se rehace en la siguiente etapa; ver docs/app_web.md, «Pendientes». */
+/* No hay tema oscuro (se quitó: no servía para proyectar). La variante
+   queda atada a una clase que nunca se pone, para que los `dark:` de los
+   componentes de shadcn no se activen con el modo oscuro del sistema. */
+@custom-variant dark (&:is(.dark *));
 
-/* Maqueta fija de 1920×1080 que se escala a la pantalla (ver Escena en
-   components/Explorador.tsx): en el proyector todo queda exactamente donde se ensayó. Tamaños
-   pensados para leerse desde la última fila. */
+/* Tokens de shadcn/ui mapeados a la identidad GeoStats (README, «Identidad
+   visual»). Solo colores del manual; los grises de texto secundario son
+   mezclas del grafito con el fondo, no tonos nuevos. Contraste de texto
+   validado (WCAG) ≥ 4.5. La paleta del mapa está en lib/color.ts y usa este
+   mismo fondo. */
 
 :root {
-  --datos: #005991;
-  --datos3: #4195d9;
-  --enfasis: #8b2c1a;
-  --texto: #2c2c2c;
-  --fondo2: #f2f2f2;
-  --titulos: var(--font-montserrat), "Segoe UI", system-ui, sans-serif;
-  --cifras: var(--font-roboto-mono), Consolas, monospace;
-  --serif: var(--font-cormorant), Georgia, serif;
+  --background: #ffffff;
+  --foreground: #2c2c2c;
+  --card: #ffffff;
+  --card-foreground: #2c2c2c;
+  --popover: #ffffff;
+  --popover-foreground: #2c2c2c;
+  --primary: #005991;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f2;
+  --secondary-foreground: #2c2c2c;
+  --muted: #f2f2f2;
+  --muted-foreground: #5e5e5e;
+  --accent: #f2f2f2;
+  --accent-foreground: #2c2c2c;
+  --destructive: #8b2c1a;
+  --border: color-mix(in oklab, #2c2c2c 14%, #ffffff);
+  --input: color-mix(in oklab, #2c2c2c 20%, #ffffff);
+  --ring: #005991;
+  --chart-1: #005991;
+  --chart-2: #1b77b8;
+  --chart-3: #4195d9;
+  --chart-4: #8b2c1a;
+  --chart-5: #b15e2e;
+  --radius: 0.625rem;
+
+  /* Propios de GeoStats */
+  --datos: #005991; /* serie principal */
+  --banda: #4195d9;
+  --enfasis: #8b2c1a; /* trazos: año actual, escenario, top N */
+  --enfasis-texto: #8b2c1a; /* cifras destacadas dentro del texto */
 }
 
-* { box-sizing: border-box; margin: 0; }
 
-html, body {
-  height: 100%;
-  overflow: hidden;
-  background: #fff;
-  color: var(--texto);
-  font-family: var(--titulos);
+@theme inline {
+  --font-sans: var(--font-montserrat), "Segoe UI", system-ui, sans-serif;
+  --font-heading: var(--font-montserrat), "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-roboto-mono), Consolas, ui-monospace, monospace;
+  --font-serif: var(--font-cormorant), Georgia, serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-datos: var(--datos);
+  --color-banda: var(--banda);
+  --color-enfasis: var(--enfasis);
+  --color-enfasis-texto: var(--enfasis-texto);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-#escena {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1920px;
-  height: 1080px;
-  transform-origin: 0 0;
-  display: grid;
-  grid-template-columns: 1040px 1fr;
-  /* minmax(0, …): el panel nunca empuja el pie fuera de la pantalla. */
-  grid-template-rows: minmax(0, 1fr) 170px;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  /* Tamaño fluido: todo está en rem, así que la página entera crece con la
+     pantalla y en el proyector queda donde se ensayó. 20 px por rem a
+     1920×1080; en celular, 16 px fijos. */
+  html {
+    @apply font-sans;
+    font-size: 16px;
+    color-scheme: light;
+  }
+  @media (min-width: 768px) {
+    html {
+      font-size: clamp(13px, min(1.04vw, 1.85vh), 28px);
+    }
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
 }
 
-/* --- Mapa --------------------------------------------------------------- */
+/* --- Serie (lib/serie.ts) --------------------------------------------- */
 
-#mapa-caja { position: relative; overflow: hidden; }
-#mapa { display: block; }
-
-#insignia {
-  position: absolute;
-  top: 28px;
-  left: 32px;
-  font: 700 34px var(--titulos);
-  letter-spacing: 0.12em;
-  padding: 8px 20px;
-  border: 3px solid currentColor;
-  opacity: 0;
-  transition: opacity 300ms;
-}
-#insignia.visible { opacity: 1; }
-#insignia.antes { color: var(--texto); }
-#insignia.despues { color: var(--enfasis); }
-
-#pregunta {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 32px;
-  padding: 80px;
-  background: rgba(255, 255, 255, 0.86);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 400ms;
-}
-#pregunta.visible { opacity: 1; }
-#pregunta p {
-  font: italic 600 72px/1.12 var(--serif);
-  text-align: center;
-  color: var(--enfasis);
-}
-#pregunta span { font: 500 22px var(--titulos); opacity: 0.45; }
-
-/* --- Panel -------------------------------------------------------------- */
-
-#panel {
-  padding: 40px 56px 0 24px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.titular { display: flex; align-items: baseline; gap: 28px; }
-#anio { font: 700 120px/1 var(--titulos); color: var(--texto); letter-spacing: -0.02em; }
-#etapa { font: 700 30px var(--titulos); letter-spacing: 0.14em; color: var(--datos); }
-#etapa.proyeccion { color: var(--enfasis); }
-
-#lente { font: 500 29px/1.25 var(--titulos); margin-top: 8px; min-height: 73px; }
-
-#cifra { font: 500 100px/1 var(--cifras); color: var(--datos); margin-top: 18px; letter-spacing: -0.03em; }
-#cifra-sub { font: 500 29px var(--titulos); margin-top: 8px; min-height: 36px; }
-#cifra-sub .mono { font-family: var(--cifras); }
-
-#frase { font: 500 30px/1.3 var(--titulos); margin-top: 22px; min-height: 78px; }
-#frase strong { color: var(--enfasis); font-weight: 700; }
-
-#serie { width: 100%; height: 250px; flex: none; margin-top: 12px; overflow: visible; }
-#serie .eje { font: 500 21px var(--cifras); fill: var(--texto); }
-#serie .desborde { font: 700 20px var(--cifras); fill: var(--datos); }
-
-#escenario { font: 700 29px/1.25 var(--titulos); color: var(--enfasis); margin-top: 10px; }
-
-/* --- Pie ---------------------------------------------------------------- */
-
-#pie {
-  grid-column: 1 / 3;
-  display: grid;
-  grid-template-columns: 1fr 520px;
-  grid-template-rows: 1fr auto;
-  align-items: center;
-  padding: 0 56px 18px 40px;
-  column-gap: 48px;
-  border-top: 3px solid var(--fondo2);
-}
-
-#anios { display: flex; gap: 10px; }
-#anios button {
-  font: 700 32px var(--cifras);
-  padding: 12px 18px;
-  border: 3px solid transparent;
-  background: none;
-  color: var(--texto);
-  cursor: pointer;
-  border-radius: 6px;
-}
-#anios button.proy { color: var(--enfasis); font-style: italic; }
-#anios button.activo { border-color: currentColor; background: var(--fondo2); }
-#anios .separador { width: 3px; background: var(--fondo2); margin: 6px 12px; }
-
-#leyenda-titulo { font: 500 22px var(--titulos); margin-bottom: 8px; }
-#leyenda-barra { height: 26px; border-radius: 3px; }
-#leyenda-marcas { position: relative; height: 30px; font: 500 20px var(--cifras); }
-#leyenda-marcas span { position: absolute; top: 4px; transform: translateX(-50%); }
-
-#aviso { grid-column: 1 / 3; font: 500 20px var(--titulos); opacity: 0.6; }
-
-/* --- Superposiciones ---------------------------------------------------- */
-
-#ayuda {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: #fff;
-  border: 3px solid var(--texto);
-  padding: 40px 56px;
-  display: none;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-}
-#ayuda.visible { display: block; }
-#ayuda h2 { font: 700 34px var(--titulos); margin-bottom: 20px; }
-#ayuda dl { display: grid; grid-template-columns: auto 1fr; gap: 12px 36px; font-size: 26px; }
-#ayuda dt { font-family: var(--cifras); font-weight: 500; color: var(--datos); }
-
-#tooltip {
-  position: absolute;
-  pointer-events: none;
-  background: #fff;
-  border: 2px solid var(--texto);
-  padding: 14px 20px;
-  font: 500 24px/1.35 var(--titulos);
-  display: none;
-  max-width: 460px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-#tooltip b { font-weight: 700; }
-#tooltip .mono { font-family: var(--cifras); }
-
-.mensaje { font: 500 28px var(--titulos); padding: 48px; }
-.mensaje.error { color: var(--enfasis); }
+.serie-rejilla { stroke: var(--border); stroke-width: 1.5; }
+.serie-eje { font: 500 16px var(--font-roboto-mono), monospace; fill: var(--muted-foreground); }
+.serie-rotulo { font: 600 14px var(--font-montserrat), sans-serif; fill: var(--muted-foreground); letter-spacing: 0.04em; }
+.serie-separador { stroke: var(--muted-foreground); stroke-width: 1.5; stroke-dasharray: 3 5; opacity: 0.6; }
+.serie-banda { fill: var(--banda); opacity: 0.22; }
+.serie-linea { fill: none; stroke: var(--datos); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.serie-linea-proy { stroke-dasharray: 8 7; }
+.serie-punto { fill: var(--foreground); stroke: var(--card); stroke-width: 2; }
+.serie-marca { stroke: var(--enfasis); stroke-width: 3; }
+.serie-ref-banda { fill: var(--foreground); opacity: 0.08; }
+.serie-ref-linea { fill: none; stroke: var(--foreground); stroke-width: 2.5; opacity: 0.5; stroke-dasharray: 2 6; stroke-linecap: round; }
+.serie-desborde { font: 700 16px var(--font-roboto-mono), monospace; fill: var(--datos); }
+.serie-columna { fill: transparent; cursor: pointer; }
+.serie-columna:hover { fill: var(--foreground); fill-opacity: 0.04; }
