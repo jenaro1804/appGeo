@@ -12,7 +12,7 @@ El trabajo va en dos etapas y se puede reanudar entre ellas, porque el
 muestreo es lo único caro:
 
     1. muestrear  ->  posterior.npz   (minutos de MCMC)
-    2. escribir   ->  celdas.json, posterior.bin, meta.json   (segundos)
+    2. escribir   ->  celdas.json, posterior.bin, meta.json, contornos.json   (segundos)
 
 Si la escritura falla, `--reusar` rehace solo la etapa 2 y el muestreo no se
 vuelve a pagar. Nunca se pierde una corrida por un error de formato.
@@ -212,9 +212,37 @@ def leer_cache(cache: Path) -> dict:
     }
 
 
+def contornos(H, mun_por_hex: np.ndarray) -> dict:
+    """Contorno de cada municipio como la unión de sus celdas, en UTM (metros).
+
+    No se usa el marco geoestadístico del INEGI: no está en `data/raw/`, y la
+    unión de celdas dibuja exactamente el territorio que el modelo ve. Las
+    aristas compartidas de dos hexágonos no coinciden al último decimal, y la
+    unión directa deja cientos de huecos falsos; el buffer de ida y vuelta de
+    1 m los cierra y conserva los reales (celdas vacías, enclaves).
+    """
+    import geopandas as gpd
+
+    g = gpd.GeoDataFrame({"j": mun_por_hex}, geometry=H.geometry.buffer(1).values,
+                         crs=H.crs).dissolve("j")
+    g["geometry"] = g.buffer(-1).simplify(5)
+
+    def anillo(r) -> list:
+        return [[round(x), round(y)] for x, y in r.coords]
+
+    return {"municipios": [
+        {"j": int(j), "anillos": [
+            anillo(r)
+            for parte in (geom.geoms if hasattr(geom, "geoms") else [geom])
+            for r in [parte.exterior, *parte.interiors]
+        ]}
+        for j, geom in g.geometry.items()
+    ]}
+
+
 def escribir(datos: dict, H, p: pd.DataFrame, municipios: list[str],
              salida: Path) -> None:
-    """Etapa 2: los tres archivos que lee la app. Ver docs/app_web.md."""
+    """Etapa 2: los archivos que lee la app. Ver docs/app_web.md."""
     n_hex, n_mun, n_anios = len(H), len(municipios), len(ANIOS)
     S = datos["b0"].shape[0]
 
@@ -227,17 +255,25 @@ def escribir(datos: dict, H, p: pd.DataFrame, municipios: list[str],
     datos["u"].tofile(salida / "posterior.bin")
 
     # Los hexágonos son regulares: con el centro y el lado se reconstruyen en
-    # el cliente, así que no hace falta enviar geometría.
-    centros = H.geometry.centroid.to_crs(4326)
+    # el cliente, así que no hace falta enviar geometría. Son regulares en UTM,
+    # no en grados, por eso la app dibuja con `x`/`y`; `lon`/`lat` quedan como
+    # referencia.
+    centros_utm = H.geometry.centroid
+    centros = centros_utm.to_crs(4326)
     conteos = p.pivot(index="hex", columns="anio", values="y").reindex(H.hex).values
     mun_por_hex = p.groupby("hex").j.first().reindex(H.hex).values
 
     (salida / "celdas.json").write_text(json.dumps({
+        "x": [round(float(v), 1) for v in centros_utm.x],
+        "y": [round(float(v), 1) for v in centros_utm.y],
         "lon": [round(float(v), 5) for v in centros.x],
         "lat": [round(float(v), 5) for v in centros.y],
         "municipio": [int(v) for v in mun_por_hex],
         "conteos": [[int(c) for c in fila] for fila in conteos],
     }), encoding="utf-8")
+
+    (salida / "contornos.json").write_text(json.dumps(
+        contornos(H, mun_por_hex)), encoding="utf-8")
 
     (salida / "meta.json").write_text(json.dumps({
         "n_hex": n_hex, "n_mun": n_mun, "n_draws": S,
@@ -252,7 +288,7 @@ def escribir(datos: dict, H, p: pd.DataFrame, municipios: list[str],
     }), encoding="utf-8")
 
     print()
-    for nombre in ("posterior.bin", "celdas.json", "meta.json"):
+    for nombre in ("posterior.bin", "celdas.json", "meta.json", "contornos.json"):
         mb = (salida / nombre).stat().st_size / 1024**2
         ruta = salida / nombre
         if ruta.is_relative_to(rutas.RAIZ):
