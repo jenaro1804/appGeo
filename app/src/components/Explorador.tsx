@@ -29,7 +29,7 @@ import { Slider } from "@/components/ui/slider";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { PALETA } from "@/lib/color";
+import { PALETA, PALETA_RIESGO } from "@/lib/color";
 import { cargar, type Datos } from "@/lib/datos";
 import { type Accion, INICIAL, type Lente, reducir, TOPS } from "@/lib/estado";
 import { Mapa, type Relleno, sinMovimiento } from "@/lib/mapa";
@@ -146,6 +146,7 @@ function Escena({ ctx }: { ctx: Contexto }) {
   const [e, despachar] = useReducer(reducir, INICIAL);
   const v = e.actual;
   const proy = esProyeccion(v.anio);
+  const paleta = v.lente === "neto" ? PALETA_RIESGO : PALETA;
 
   const cajaRef = useRef<HTMLDivElement>(null);
   const tarjetaRef = useRef<HTMLElement>(null);
@@ -303,6 +304,7 @@ function Escena({ ctx }: { ctx: Contexto }) {
   useEffect(() => {
     const mapa = mapaRef.current!;
     const escalar = v.lente === "neto" ? tNeto : tCrudo;
+    mapa.paleta = paleta;
     mapa.objetivo(Float64Array.from(calculo.valores, escalar), calculo.conc?.mascara ?? null, primero.current);
 
     serieObj.current!.actualizar(ANIOS.map((a) => modelo.totales(a).total), v.anio, null, primero.current);
@@ -624,7 +626,7 @@ function Escena({ ctx }: { ctx: Contexto }) {
             </div>
           </div>
           <div className="md:pointer-events-auto">
-            <Leyenda titulo={tituloLeyenda} gradiente={PALETA.gradiente} marcas={marcas} atribucion={calles} />
+            <Leyenda titulo={tituloLeyenda} gradiente={paleta.gradiente} marcas={marcas} atribucion={calles} />
           </div>
         </div>
       </section>

@@ -12,7 +12,7 @@
 // interfaz, para ver las calles debajo) y `capa` todo lo que debe seguir
 // visible: contornos, top N, rótulos y el hexágono bajo el mouse.
 
-import { colorDe, PALETA } from "./color";
+import { colorDe, PALETA, type Paleta } from "./color";
 import type { Datos } from "./datos";
 import { utmAGeo, geoAMercator } from "./geo";
 
@@ -81,6 +81,8 @@ class Animado {
 
 export class Mapa {
   hover: number | null = null;
+  /** La rampa con la que se pinta; cambia con la lente (accidentes/riesgo). */
+  paleta: Paleta = PALETA;
   etiquetas = true;
   /** Familia de los rótulos; con next/font se lee de --font-montserrat. */
   fuente = "Montserrat, 'Segoe UI', sans-serif";
@@ -270,7 +272,7 @@ export class Mapa {
   dibujar() {
     if (!this.cam || this.ancho === 0) return; // todavía sin cámara o sin tamaño
     const dpr = window.devicePixelRatio || 1;
-    const p = PALETA;
+    const p = this.paleta;
     const u = this.rem / 20; // los trazos se diseñaron a 20 px por rem (1080p)
     const t = this.color.actual;
     const at = this.atenuado.actual;

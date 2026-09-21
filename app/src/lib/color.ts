@@ -96,6 +96,20 @@ export const PALETA: Paleta = crearPaleta(
   "#FFFFFF", MANUAL.grafito, MANUAL.enfasis, "rgba(255,255,255,0.9)",
 );
 
+/**
+ * Semáforo para el mapa de riesgo: verde donde se reporta menos que la zona
+ * promedio, amarillo donde se reporta igual, rojo donde más. Es divergente
+ * porque el dominio lo es: la rampa está centrada en el 1.
+ *
+ * Se sale del manual a propósito (decisión del autor, 2026-09-20). El
+ * contorno del top N pasa a grafito: el `#8B2C1A` del manual se perdía sobre
+ * los rojos de la propia rampa.
+ */
+export const PALETA_RIESGO: Paleta = crearPaleta(
+  ["#1A9641", "#A6D96A", "#FFFFBF", "#FDAE61", "#D7191C"],
+  "#FFFFFF", MANUAL.grafito, MANUAL.grafito, "rgba(255,255,255,0.9)",
+);
+
 export function colorDe(p: Paleta, t: number, atenuado: number): string {
   const i = Math.round(Math.min(1, Math.max(0, t)) * (N_T - 1));
   const d = Math.round(Math.min(1, Math.max(0, atenuado)) * (N_D - 1));
