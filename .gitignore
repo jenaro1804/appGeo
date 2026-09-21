@@ -142,3 +142,6 @@ docs/reporte/*.synctex.gz
 # App web (app/): tiene su propio .gitignore (node_modules, .next,
 # public/datos, la referencia de las pruebas).
 # ---------------------------------------------------------------
+
+# Skills locales de Claude Code (instaladas por sesión, no van al repo).
+.claude/skills/
