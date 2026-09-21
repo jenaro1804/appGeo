@@ -73,7 +73,11 @@ function preparar(datos: Datos, ml: MapLibre): Contexto {
     ml,
     modelo,
     observados,
-    maxCrudo: cuantil(todos, 0.99),
+    // Tope de la escala de accidentes: el percentil 99 de las 13,446
+    // celda-año, redondeado a una cifra que se pueda leer (300, no 319). El
+    // 1 % por encima se satura; el máximo real es 804 y, si fuera el tope,
+    // aplastaría contra el mismo color a todo el resto de la ciudad.
+    maxCrudo: redondear1235(cuantil(todos, 0.99)),
     // Riesgo: dominio fijo y simétrico (×10 menos … ×10 más), no los
     // percentiles de la distribución. Así el 1 —la zona típica— cae justo en
     // el centro de la rampa y la leyenda se explica con tres palabras. El
@@ -89,6 +93,14 @@ function preparar(datos: Datos, ml: MapLibre): Contexto {
 // --- Formato ------------------------------------------------------------------
 
 const redondear = (v: number) => Math.round(v / 100) * 100; // una proyección no tiene precisión de unidades
+
+/** Al 1, 2, 3, 5 o 10 más cercano de su orden de magnitud (en escala log):
+ *  topes de escala que se leen. 319 → 300. */
+function redondear1235(v: number): number {
+  const orden = 10 ** Math.floor(Math.log10(v));
+  const cerca = (a: number, b: number) => (Math.abs(Math.log(v / a)) <= Math.abs(Math.log(v / b)) ? a : b);
+  return [1, 2, 3, 5, 10].map((m) => m * orden).reduce(cerca);
+}
 const pct = (f: number) => `${Math.round(f * 100)} %`;
 const OBSERVADOS = ANIOS.filter((a) => !esProyeccion(a));
 const PROYECTADOS = ANIOS.filter(esProyeccion);
@@ -364,23 +376,19 @@ function Escena({ ctx }: { ctx: Contexto }) {
     </>
   ) : v.lente === "neto" ? (
     <>
-      Cuántas veces más (o menos) accidentes tiene cada zona que la zona típica de la ciudad, una vez descontado
-      cuánto reporta su municipio. Compara zonas{" "}
-      <strong className="font-bold text-enfasis-texto">dentro de un mismo municipio</strong>; no cambia con el año.
+      Qué tan cargada está cada zona comparada con la zona promedio. Compara{" "}
+      <strong className="font-bold text-enfasis-texto">dentro de un mismo municipio</strong>. Es igual en todos los
+      años.
     </>
   ) : proy ? (
     <>
-      El mapa muestra el valor central de cada hexágono; la incertidumbre está en la banda de la gráfica. Supone que
-      cada municipio sigue reportando como en 2024.
+      El mapa muestra el valor central de cada hexágono. La incertidumbre está en la banda de la gráfica.
     </>
-  ) : (
-    <>Cada hexágono mide 0.65 km². Resalta el top del territorio para ver cuánto se concentran los accidentes.</>
-  );
+  ) : null; // un año observado, sin resaltar nada: el mapa habla solo
 
   const marcas: [number, string][] =
     v.lente === "crudo"
-      ? [...[0, 1, 10, 100].filter((x) => x <= ctx.maxCrudo).map((x): [number, string] => [tCrudo(x), String(x)]),
-         [1, `${Math.round(ctx.maxCrudo)}+`]]
+      ? [[0, "0"], [tCrudo(10), "10"], [1, `${ctx.maxCrudo}+`]]
       : [[0, "10× menos"], [tNeto(1), "igual"], [1, "10× más"]];
   const tituloLeyenda =
     v.lente === "crudo"
@@ -440,7 +448,7 @@ function Escena({ ctx }: { ctx: Contexto }) {
                 </p>
               </div>
 
-              <p className="text-base leading-snug">{frase}</p>
+              {frase && <p className="text-base leading-snug">{frase}</p>}
 
               <figure className="flex flex-col gap-2">
                 <figcaption className="text-sm font-semibold">Total por año, 2019-2027</figcaption>

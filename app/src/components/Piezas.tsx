@@ -47,6 +47,10 @@ export function Cifra({ valor }: { valor: number }) {
   );
 }
 
+/** Separación mínima entre marcas, en fracción del ancho: por debajo de
+ *  esto las etiquetas se tocan («100300+»). La última manda: es el tope. */
+const SEPARACION = 0.2;
+
 export function Leyenda({ titulo, gradiente, marcas, atribucion }: {
   titulo: string;
   gradiente: string;
@@ -59,7 +63,7 @@ export function Leyenda({ titulo, gradiente, marcas, atribucion }: {
       <p className="text-xs font-semibold text-muted-foreground">{titulo}</p>
       <div className="h-3 rounded-sm" style={{ background: gradiente }} />
       <div className="relative h-4 text-xs">
-        {marcas.map(([t, texto]) => {
+        {separadas(marcas).map(([t, texto]) => {
           const x = Math.min(1, Math.max(0, t));
           return (
             <span
@@ -84,6 +88,16 @@ export function Leyenda({ titulo, gradiente, marcas, atribucion }: {
       )}
     </div>
   );
+}
+
+/** Quita las marcas que caerían encima de otra, conservando siempre la última. */
+function separadas(marcas: [number, string][]): [number, string][] {
+  return marcas.reduce<[number, string][]>((puestas, marca, k) => {
+    const previa = puestas[puestas.length - 1];
+    if (!previa || marca[0] - previa[0] >= SEPARACION) puestas.push(marca);
+    else if (k === marcas.length - 1 && puestas.length > 1) puestas[puestas.length - 1] = marca;
+    return puestas;
+  }, []);
 }
 
 export function TooltipCelda({ i, x, y, ancho, vista, modelo }: {
