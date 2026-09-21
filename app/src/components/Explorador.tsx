@@ -15,16 +15,17 @@
 
 import {
   BookOpenIcon, HexagonIcon, KeyboardIcon, MapIcon, MinusIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon,
-  RotateCcwIcon, ScanIcon,
+  RotateCcwIcon, ScanIcon, TriangleAlertIcon,
 } from "lucide-react";
 import type { Map as MapaML } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
 import { Slider } from "@/components/ui/slider";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -123,17 +124,35 @@ export default function Explorador() {
   if (error)
     return (
       <div className="flex min-h-dvh items-center justify-center p-6">
-        <Alert variant="destructive" className="max-w-xl">
-          <AlertTitle>No se pudo cargar el modelo</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <TriangleAlertIcon />
+            </EmptyMedia>
+            <EmptyTitle>No se pudo cargar el modelo</EmptyTitle>
+            <EmptyDescription>{error}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" onClick={() => location.reload()}>
+              <RotateCcwIcon data-icon="inline-start" />
+              Reintentar
+            </Button>
+          </EmptyContent>
+        </Empty>
       </div>
     );
   if (!ctx)
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-2 text-muted-foreground">
-        <p className="text-lg font-semibold text-foreground">Cargando el modelo…</p>
-        <p className="text-sm">50,000 escenarios por año, calculados en el navegador.</p>
+      <div className="flex min-h-dvh items-center justify-center p-6">
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Spinner aria-label="Cargando" />
+            </EmptyMedia>
+            <EmptyTitle>Cargando el modelo…</EmptyTitle>
+            <EmptyDescription>50,000 escenarios por año, calculados en el navegador.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </div>
     );
   return <Escena ctx={ctx} />;
@@ -424,6 +443,8 @@ function Escena({ ctx }: { ctx: Contexto }) {
           <Card className="min-h-full gap-4 [--card-spacing:--spacing(6)]">
             <CardHeader>
               <p className="text-xs font-semibold tracking-[0.18em] text-primary uppercase">GeoStats · ATUS-INEGI</p>
+              {/* El tamaño y el peso se suben a propósito: la tarjeta se lee
+                  desde la última fila de la sala (docs/app_web.md). */}
               <CardTitle className="text-lg leading-tight font-bold">Accidentes viales en la Zona Metropolitana de Monterrey</CardTitle>
             </CardHeader>
             <Separator />
@@ -469,10 +490,8 @@ function Escena({ ctx }: { ctx: Contexto }) {
               </figure>
 
             </CardContent>
-            <CardFooter className="py-2 text-xs text-muted-foreground">
-              <p>
-                Modelo de accidentes reportados. ATUS-INEGI, 2019-2024.
-              </p>
+            <CardFooter className="py-2">
+              <p className="text-xs text-muted-foreground">Modelo de accidentes reportados. ATUS-INEGI, 2019-2024.</p>
             </CardFooter>
           </Card>
         </div>
@@ -496,9 +515,12 @@ function Escena({ ctx }: { ctx: Contexto }) {
           </div>
           <canvas ref={hexRef} className="pointer-events-none absolute inset-0" style={{ opacity: opacidad / 100 }} />
           <canvas ref={capaRef} className="pointer-events-none absolute inset-0" />
-          <div
+          {/* `bg-card/90` es el token de la tarjeta con transparencia: flota
+              sobre el mapa y deja entrever las calles de abajo. */}
+          <Card
             ref={herramientasRef}
-            className="absolute top-3 right-3 z-10 flex flex-col items-center gap-1 rounded-lg bg-card/90 p-1.5 shadow-sm ring-1 ring-foreground/10 backdrop-blur-sm md:top-1/2 md:right-5 md:-translate-y-1/2"
+            size="sm"
+            className="absolute top-3 right-3 z-10 flex flex-col items-center gap-1 bg-card/90 p-1.5 shadow-sm backdrop-blur-sm md:top-1/2 md:right-5 md:-translate-y-1/2"
           >
             <BotonIcono etiqueta="Acercar (+)" variante="ghost" onClick={() => baseObj.current?.mapa.zoomIn()}>
               <PlusIcon />
@@ -538,7 +560,7 @@ function Escena({ ctx }: { ctx: Contexto }) {
               </TooltipTrigger>
               <TooltipContent side="left">Opacidad de los hexágonos (H)</TooltipContent>
             </Tooltip>
-          </div>
+          </Card>
           {hover && (
             <TooltipCelda
               i={hover.i}
@@ -623,8 +645,8 @@ function Escena({ ctx }: { ctx: Contexto }) {
                 aria-label="Resaltar el top del territorio"
               >
                 {TOPS.map((t, k) => (
-                  <ToggleGroupItem key={k} value={String(k)} className="font-mono">
-                    {t === 0 ? "No" : `${t * 100} %`}
+                  <ToggleGroupItem key={k} value={String(k)}>
+                    <span className="font-mono">{t === 0 ? "No" : `${t * 100} %`}</span>
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
@@ -660,8 +682,8 @@ function GrupoAnios({ titulo, anios, anio, alElegir }: {
         aria-label={`Años ${titulo.toLowerCase()}`}
       >
         {anios.map((a) => (
-          <ToggleGroupItem key={a} value={String(a)} className="font-mono">
-            {a}
+          <ToggleGroupItem key={a} value={String(a)}>
+            <span className="font-mono">{a}</span>
           </ToggleGroupItem>
         ))}
       </ToggleGroup>

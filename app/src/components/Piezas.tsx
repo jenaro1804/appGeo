@@ -5,6 +5,7 @@
 // «Cómo leer esto».
 
 import { useEffect, useRef, useState } from "react";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
 import { Separator } from "@/components/ui/separator";
@@ -59,34 +60,42 @@ export function Leyenda({ titulo, gradiente, marcas, atribucion }: {
   atribucion: boolean;
 }) {
   return (
-    <div className="flex w-64 flex-col gap-1.5 rounded-lg bg-card/90 p-3 ring-1 ring-foreground/10 backdrop-blur-sm">
-      <p className="text-xs font-semibold text-muted-foreground">{titulo}</p>
-      <div className="h-3 rounded-sm" style={{ background: gradiente }} />
-      <div className="relative h-4 text-xs">
-        {separadas(marcas).map(([t, texto]) => {
-          const x = Math.min(1, Math.max(0, t));
-          return (
-            <span
-              key={texto}
-              className={cn("absolute whitespace-nowrap tabular-nums", x > 0.02 && x < 0.98 && "-translate-x-1/2")}
-              style={x >= 0.98 ? { right: 0 } : { left: `${x * 100}%` }}
-            >
-              {texto}
-            </span>
-          );
-        })}
-      </div>
+    // `bg-card/90`: el token de la tarjeta con transparencia, para no tapar
+    // del todo el mapa que queda debajo.
+    <Card size="sm" className="w-64 gap-2 bg-card/90 backdrop-blur-sm">
+      <CardHeader>
+        <CardDescription>{titulo}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-1.5">
+        <div className="h-3 rounded-sm" style={{ background: gradiente }} />
+        <div className="relative h-4 text-xs">
+          {separadas(marcas).map(([t, texto]) => {
+            const x = Math.min(1, Math.max(0, t));
+            return (
+              <span
+                key={texto}
+                className={cn("absolute whitespace-nowrap tabular-nums", x > 0.02 && x < 0.98 && "-translate-x-1/2")}
+                style={x >= 0.98 ? { right: 0 } : { left: `${x * 100}%` }}
+              >
+                {texto}
+              </span>
+            );
+          })}
+        </div>
+      </CardContent>
       {atribucion && (
-        <a
-          href="https://www.openstreetmap.org/copyright"
-          target="_blank"
-          rel="noreferrer"
-          className="text-[0.65rem] text-muted-foreground underline-offset-2 hover:underline"
-        >
-          Calles: © OpenStreetMap · Protomaps
-        </a>
+        <CardFooter>
+          <a
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+          >
+            Calles: © OpenStreetMap · Protomaps
+          </a>
+        </CardFooter>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -119,28 +128,31 @@ export function TooltipCelda({ i, x, y, ancho, vista, modelo }: {
   // Cerca del borde derecho, el tooltip se abre hacia la izquierda.
   const izquierda = x > ancho - 320;
   return (
-    <div
-      className="pointer-events-none absolute z-20 flex max-w-72 flex-col gap-0.5 rounded-lg bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10"
+    <Card
+      size="sm"
+      className="pointer-events-none absolute z-20 max-w-72 shadow-md"
       style={{ left: izquierda ? undefined : x + 18, right: izquierda ? ancho - x + 18 : undefined, top: y + 14 }}
     >
-      <b className="font-semibold">{modelo.municipios[modelo.municipioDe[i]]}</b>
-      {vista.lente === "neto" ? (
-        <span>
-          <b className="font-mono">{veces(modelo.neto[i])}</b> que la zona típica
-        </span>
-      ) : obs !== undefined ? (
-        <>
+      <CardContent className="flex flex-col gap-0.5">
+        <b className="font-semibold">{modelo.municipios[modelo.municipioDe[i]]}</b>
+        {vista.lente === "neto" ? (
           <span>
-            {vista.anio}: <b className="font-mono">{obs}</b> reportados
+            <b className="font-mono">{veces(modelo.neto[i])}</b> que la zona típica
           </span>
-          <span>modelo: {rango}</span>
-        </>
-      ) : (
-        <span>
-          {vista.anio}: {rango} esperados
-        </span>
-      )}
-    </div>
+        ) : obs !== undefined ? (
+          <>
+            <span>
+              {vista.anio}: <b className="font-mono">{obs}</b> reportados
+            </span>
+            <span>modelo: {rango}</span>
+          </>
+        ) : (
+          <span>
+            {vista.anio}: {rango} esperados
+          </span>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

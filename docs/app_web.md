@@ -377,6 +377,34 @@ app/
 componentes, la skill de shadcn pide correr `npx shadcn@latest info` y leer
 la documentación del componente (`npx shadcn@latest docs <componente>`).
 
+**Pasada de estilo shadcn (2026-09-20).** Se auditó `src/` contra las reglas
+de la skill (instalada en `.claude/skills/shadcn/`, ignorada por git) y se
+corrigió lo que se salía:
+
+- Los estados de **carga y error** eran `<p>` sueltos y un `Alert`: ahora son
+  `Empty` (`EmptyMedia` + `EmptyTitle` + `EmptyDescription`), con `Spinner`
+  al cargar y un botón **Reintentar** al fallar. Se agregaron `empty` y
+  `spinner` al proyecto.
+- Las **superficies flotantes** (leyenda, columna de zoom y capas, tooltip de
+  la celda) copiaban a mano los estilos de `Card` (`rounded-lg bg-card/90
+  ring-1 …`). Ahora son `Card size="sm"`; la atribución de OpenStreetMap va
+  en un `CardFooter`. Se conserva `bg-card/90 backdrop-blur-sm`, que no es un
+  color crudo sino el token de la tarjeta con transparencia, para dejar ver
+  el mapa por debajo.
+- La **tipografía dejó de ponerse en los componentes**: `font-mono` pasó de
+  `ToggleGroupItem` al `<span>` de dentro, y el pie de la tarjeta lleva sus
+  clases en el `<p>`, no en `CardFooter`.
+- **Excepción consciente:** `CardTitle` sí lleva `text-lg font-bold`. La regla
+  pide no tocar la tipografía de un componente, pero el título se lee desde la
+  última fila de la sala. Queda anotado en el código.
+- Lo que ya estaba bien: sin `space-x/y-*`, sin `w-N h-N`, sin `dark:`
+  manuales, sin colores crudos de Tailwind, `cn()` en todas las condicionales
+  y `data-icon` en los iconos de botón. Los `z-index` que hay son de capas
+  propias del mapa, no de overlays de shadcn.
+- Quedaron sin usar `alert`, `popover` y `switch` en `components/ui/`
+  (se fueron con los escenarios y el tema oscuro). Se pueden borrar y
+  recuperar con `npx shadcn@latest add`.
+
 ## Estado actual
 
 Hecho:
