@@ -600,11 +600,16 @@ function Escena({ ctx }: { ctx: Contexto }) {
           )}
         >
           <div className="flex flex-wrap items-end gap-4 md:pointer-events-auto">
-            <div className="flex flex-wrap items-end gap-2">
-              <GrupoAnios titulo="Reportado" anios={OBSERVADOS} anio={v.anio} alElegir={(a) => despachar({ tipo: "anio", anio: a })} />
-              <Separator orientation="vertical" className="mb-1 hidden h-9 md:block" />
-              <GrupoAnios titulo="Proyección" anios={PROYECTADOS} anio={v.anio} alElegir={(a) => despachar({ tipo: "anio", anio: a })} />
-            </div>
+            {/* El mapa de riesgo es el mismo todos los años: elegir uno no
+                haría nada. El año sigue mandando en la cifra y en la serie de
+                la tarjeta, que se mueven con las flechas o con la gráfica. */}
+            {v.lente === "crudo" && (
+              <div className="flex flex-wrap items-end gap-2">
+                <GrupoAnios titulo="Reportado" anios={OBSERVADOS} anio={v.anio} alElegir={(a) => despachar({ tipo: "anio", anio: a })} />
+                <Separator orientation="vertical" className="mb-1 hidden h-9 md:block" />
+                <GrupoAnios titulo="Proyección" anios={PROYECTADOS} anio={v.anio} alElegir={(a) => despachar({ tipo: "anio", anio: a })} />
+              </div>
+            )}
             <div className="flex flex-col gap-1">
               <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Resaltar {v.lente === "neto" ? "más riesgo" : "más accidentes"}
