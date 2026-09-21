@@ -1,7 +1,7 @@
 "use client";
 
-// La app completa: carga el posterior, guarda el estado (año, lente,
-// proyección, top N, escenario, referencia) y decide qué mostrar. El modelo
+// La app completa: carga el posterior, guarda el estado (año, lente, top N)
+// y decide qué mostrar. El modelo
 // calcula (lib/modelo.ts); el mapa y la serie dibujan (lib/mapa.ts,
 // lib/serie.ts).
 //
@@ -14,8 +14,8 @@
 // acerca y se arrastra como un mapa web, y los hexágonos lo siguen.
 
 import {
-  BookOpenIcon, FlaskConicalIcon, HexagonIcon, KeyboardIcon, MapIcon, MinusIcon, PlusIcon, RotateCcwIcon, ScanIcon,
-  XIcon,
+  BookOpenIcon, HexagonIcon, KeyboardIcon, MapIcon, MinusIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon,
+  RotateCcwIcon, ScanIcon,
 } from "lucide-react";
 import type { Map as MapaML } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -24,8 +24,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Kbd } from "@/components/ui/kbd";
-import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Toggle } from "@/components/ui/toggle";
@@ -33,13 +31,10 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PALETA } from "@/lib/color";
 import { cargar, type Datos } from "@/lib/datos";
-import { PRESETS } from "@/lib/escenarios";
-import {
-  type Accion, INICIAL, type Lente, type PresetListo, type Proyeccion, reducir, TOPS, type Vista, vistaDe,
-} from "@/lib/estado";
+import { type Accion, INICIAL, type Lente, reducir, TOPS } from "@/lib/estado";
 import { Mapa, type Relleno, sinMovimiento } from "@/lib/mapa";
-import { camaraDe, crearMapaBase, encuadrar, type MapLibre, prepararMapLibre } from "@/lib/mapaBase";
-import { ANIOS, concentracion, cuantil, esProyeccion, Modelo, type Resumen } from "@/lib/modelo";
+import { camaraDe, crearMapaBase, encuadrar, limitar, type MapLibre, prepararMapLibre } from "@/lib/mapaBase";
+import { ANIOS, concentracion, cuantil, esProyeccion, Modelo } from "@/lib/modelo";
 import { Serie } from "@/lib/serie";
 import { cn } from "@/lib/utils";
 import { Ayuda, Cifra, Guia, Leyenda, miles, TooltipCelda } from "./Piezas";
@@ -50,9 +45,9 @@ interface Contexto {
   datos: Datos;
   /** MapLibre, importado al cargar (no se puede importar al prerenderizar). */
   ml: MapLibre;
-  /** Un modelo por forma de proyectar; en 2019-2024 dan lo mismo. */
-  modelos: Record<Proyeccion, Modelo>;
-  presets: PresetListo[];
+  /** Persistencia: cada municipio sigue reportando como en 2024 (lo que validó
+   *  el notebook). Es la única forma de proyectar que muestra la app. */
+  modelo: Modelo;
   observados: (number | null)[];
   maxCrudo: number;
   netoLo: number;
@@ -61,49 +56,33 @@ interface Contexto {
 }
 
 function preparar(datos: Datos, ml: MapLibre): Contexto {
-  const modelos: Record<Proyeccion, Modelo> = {
-    estable: new Modelo(datos, { innovaciones: false }),
-    cambios: new Modelo(datos),
-  };
-  const { municipios } = datos.meta;
-
-  const presets = PRESETS.map((p) => {
-    const idx = p.municipios.map((nombre) => {
-      const j = municipios.indexOf(nombre);
-      if (j < 0) throw new Error(`escenarios.ts: no existe el municipio «${nombre}». Opciones: ${municipios.join(", ")}`);
-      return j;
-    });
-    const escenario = idx.length ? { municipios: idx, comoEn: p.comoEn, factor: p.factor } : null;
-    return { ...p, escenario };
-  });
+  const modelo = new Modelo(datos, { innovaciones: false });
 
   // Escalas de color fijas para todos los años: si se reescalaran por año, un
   // municipio que empieza a reportar no se vería «encenderse».
   const todos = datos.celdas.conteos.flat().sort((a, b) => a - b);
-  const neto = Float64Array.from(modelos.estable.neto).sort();
 
-  // Eje Y de la serie: fijo para las dos proyecciones y todos los escenarios,
-  // para que el público compare datos y no ejes. El techo es el p95 de 2025
-  // con cambios de reporte; más allá, la cola t llevaría el eje a cientos de
-  // miles y aplastaría la historia, así que la banda se recorta y una
-  // etiqueta dice hasta dónde llega.
-  const estados = [null, ...presets.map((p) => p.escenario)];
-  const ms = Object.values(modelos);
-  const rs = ms.flatMap((m) => estados.flatMap((e) => ANIOS.map((a) => m.totales(a, e).total)));
-  const techo = estados.map((e) => modelos.cambios.totales(2025, e).total.p95);
-  const observados = ANIOS.map((a) => modelos.estable.totalObservado(a));
+  // Eje Y de la serie: fijo para todos los años, para que el público compare
+  // datos y no ejes.
+  const rs = ANIOS.map((a) => modelo.totales(a).total);
+  const observados = ANIOS.map((a) => modelo.totalObservado(a));
   const obs = observados.filter((o): o is number => o !== null);
 
   return {
     datos,
     ml,
-    modelos,
-    presets,
+    modelo,
     observados,
     maxCrudo: cuantil(todos, 0.99),
-    netoLo: cuantil(neto, 0.02),
-    netoHi: cuantil(neto, 0.98),
-    dominio: [Math.min(...rs.map((r) => r.p5), ...obs) * 0.95, Math.max(...techo, ...obs)],
+    // Riesgo: dominio fijo y simétrico (×10 menos … ×10 más), no los
+    // percentiles de la distribución. Así el 1 —la zona típica— cae justo en
+    // el centro de la rampa y la leyenda se explica con tres palabras. El
+    // 10 % de celdas por debajo de 0.1 y el 5 % por encima de 10 se saturan
+    // en los extremos; con los percentiles (0.04 y 14.4) el punto neutro
+    // quedaba descolocado y las marcas eran ×0.3 y ×3.
+    netoLo: 0.1,
+    netoHi: 10,
+    dominio: [Math.min(...rs.map((r) => r.p5), ...obs) * 0.95, Math.max(...rs.map((r) => r.p95), ...obs)],
   };
 }
 
@@ -151,13 +130,13 @@ export default function Explorador() {
 // --- La escena ------------------------------------------------------------------
 
 function Escena({ ctx }: { ctx: Contexto }) {
-  const { datos, presets } = ctx;
+  const { datos, modelo } = ctx;
   const [e, despachar] = useReducer(reducir, INICIAL);
-  const v = vistaDe(e);
-  const modelo = ctx.modelos[v.proyeccion];
+  const v = e.actual;
   const proy = esProyeccion(v.anio);
 
   const cajaRef = useRef<HTMLDivElement>(null);
+  const tarjetaRef = useRef<HTMLElement>(null);
   const cabRef = useRef<HTMLDivElement>(null); // la fila de botones de arriba
   const pieRef = useRef<HTMLDivElement>(null);
   const herramientasRef = useRef<HTMLDivElement>(null); // la columna de zoom y capas
@@ -171,7 +150,10 @@ function Escena({ ctx }: { ctx: Contexto }) {
   const primero = useRef(true);
   const [hover, setHover] = useState<{ i: number; x: number; y: number; ancho: number } | null>(null);
   const [guia, setGuia] = useState(false);
-  const [menu, setMenu] = useState(false);
+  // La tarjeta de la izquierda se desliza para dejarle toda la pantalla al
+  // mapa. Al esconderla cambia el ancho de la caja: el ResizeObserver
+  // reencuadra y vuelve a calcular los límites del mapa.
+  const [tarjeta, setTarjeta] = useState(true);
   // Las capas: el mapa de calles se enciende y se apaga; los hexágonos se
   // transparentan (en 0 % solo quedan las calles, los contornos y los rótulos).
   const [calles, setCalles] = useState(true);
@@ -184,11 +166,11 @@ function Escena({ ctx }: { ctx: Contexto }) {
   // Lo que se muestra en el estado actual
   const calculo = useMemo(() => {
     const observados = modelo.observados(v.anio);
-    const pesos = observados ?? modelo.medianas(v.anio, v.escenario);
+    const pesos = observados ?? modelo.medianas(v.anio);
     const valores = v.lente === "neto" ? modelo.neto : pesos;
     const conc = TOPS[e.top] > 0 ? concentracion(valores, pesos, TOPS[e.top]) : null;
-    return { valores, conc, total: modelo.totales(v.anio, v.escenario).total, obs: modelo.totalObservado(v.anio) };
-  }, [modelo, v.anio, v.lente, v.escenario, e.top]);
+    return { valores, conc, total: modelo.totales(v.anio).total, obs: modelo.totalObservado(v.anio) };
+  }, [modelo, v.anio, v.lente, e.top]);
 
   // --- Mapa, mapa base y serie: objetos imperativos dentro de React ---
   // Se crean y se miden en el mismo efecto: un Mapa nunca existe sin tamaño.
@@ -206,9 +188,7 @@ function Escena({ ctx }: { ctx: Contexto }) {
     if (familia) mapa.fuente = familia;
 
     // El encuadre inicial deja libre lo que tapan los controles flotantes.
-    // Solo la fila de botones de arriba reserva espacio, no el aviso del
-    // escenario, para que el mapa no se mueva justo al revelar. En celular
-    // los controles van debajo y el mapa usa toda su caja.
+    // En celular los controles van debajo y el mapa usa toda su caja.
     const ancho = matchMedia("(min-width: 768px)");
     const tamRem = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
     const relleno = (): Relleno => {
@@ -218,7 +198,10 @@ function Escena({ ctx }: { ctx: Contexto }) {
         ? {
             arr: cab.getBoundingClientRect().bottom - c.top + 0.5 * rem,
             aba: c.bottom - pie.getBoundingClientRect().top + 0.5 * rem,
-            izq: 1.25 * rem,
+            // La tarjeta flota sobre el mapa: si está a la vista, el encuadre
+            // la esquiva. Se mide dónde está de verdad, no el estado de React,
+            // porque se lee también a media animación.
+            izq: Math.max(1.25 * rem, tarjetaRef.current!.getBoundingClientRect().right - c.left + 0.5 * rem),
             der: c.right - herramientas.getBoundingClientRect().left + 0.5 * rem,
           }
         : { arr: 0.75 * rem, aba: 0.75 * rem, izq: 0.75 * rem, der: 0.75 * rem };
@@ -255,10 +238,25 @@ function Escena({ ctx }: { ctx: Contexto }) {
       setHover(null);
     });
 
+    // Firma de lo que obliga a reencuadrar: el tamaño del mapa y los
+    // controles que flotan encima. El relleno de la izquierda (la tarjeta)
+    // queda fuera a propósito: esconderla no debe mover el mapa, solo
+    // destapar lo que ya estaba dibujado ahí.
+    let firma = "";
     const medir = () => {
-      mapa.medir(caja.clientWidth, caja.clientHeight, tamRem());
+      const w = caja.clientWidth;
+      const h = caja.clientHeight;
+      mapa.medir(w, h, tamRem());
       base.resize();
-      if (!movido) reencuadrar(false);
+      const r = relleno();
+      const ahora = [w, h, r.arr, r.aba, r.der].map((x) => Math.round(x)).join("/");
+      if (ahora !== firma) {
+        firma = ahora;
+        // Con la caja nueva, el encuadre es otro zoom: se recalculan el zoom
+        // mínimo y el área por la que se puede arrastrar.
+        limitar(base, mapa.extension, r, w, h);
+        if (!movido) reencuadrar(false);
+      }
       sincronizar();
     };
     medir();
@@ -293,16 +291,13 @@ function Escena({ ctx }: { ctx: Contexto }) {
   useEffect(() => {
     const mapa = mapaRef.current!;
     const escalar = v.lente === "neto" ? tNeto : tCrudo;
-    mapa.resaltados = new Set(v.escenario && proy ? v.escenario.municipios : []);
     mapa.objetivo(Float64Array.from(calculo.valores, escalar), calculo.conc?.mascara ?? null, primero.current);
 
-    const otra = e.referencia && (e.viendoReferencia ? e.actual : e.referencia);
-    const serie = (w: Vista): Resumen[] => ANIOS.map((a) => ctx.modelos[w.proyeccion].totales(a, w.escenario).total);
-    serieObj.current!.actualizar(serie(v), v.anio, otra && serie(otra), primero.current);
+    serieObj.current!.actualizar(ANIOS.map((a) => modelo.totales(a).total), v.anio, null, primero.current);
     primero.current = false;
     // tCrudo y tNeto solo dependen de ctx.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calculo, e.referencia, e.viendoReferencia, e.actual, v, proy, ctx]);
+  }, [calculo, v, ctx]);
 
   useEffect(() => {
     mapaRef.current!.etiquetas = e.etiquetas;
@@ -322,6 +317,8 @@ function Escena({ ctx }: { ctx: Contexto }) {
       const k = ev.key;
       if (k === "l" || k === "L") {
         setGuia(true);
+      } else if (k === "t" || k === "T") {
+        setTarjeta((t) => !t);
       } else if (k === "b" || k === "B") {
         setCalles((c) => !c);
       } else if (k === "h" || k === "H") {
@@ -334,20 +331,14 @@ function Escena({ ctx }: { ctx: Contexto }) {
       } else if (k === "e" || k === "E") {
         baseObj.current?.reencuadrar();
       } else {
-        const preset = presets.find((p) => p.tecla === k);
-        const accion: Accion | null = preset
-          ? { tipo: "lanzar", preset }
-          : k === "ArrowRight" ? { tipo: "moverAnio", paso: 1 }
+        const accion: Accion | null =
+            k === "ArrowRight" ? { tipo: "moverAnio", paso: 1 }
           : k === "ArrowLeft" ? { tipo: "moverAnio", paso: -1 }
           : k === "Home" ? { tipo: "anio", anio: ANIOS[0] }
           : k === "End" ? { tipo: "anio", anio: ANIOS[ANIOS.length - 1] }
           : k === "n" || k === "N" ? { tipo: "lente" }
-          : k === "p" || k === "P" ? { tipo: "proyeccion" }
           : k === "ArrowUp" ? { tipo: "top", paso: 1 }
           : k === "ArrowDown" ? { tipo: "top", paso: -1 }
-          : k === " " ? { tipo: "revelar" }
-          : k === "f" || k === "F" ? { tipo: "fijar" }
-          : k === "a" || k === "A" ? { tipo: "alternar" }
           : k === "m" || k === "M" ? { tipo: "etiquetas" }
           : k === "?" ? { tipo: "ayuda" }
           : k === "0" || k === "Escape" ? { tipo: "reiniciar" }
@@ -360,7 +351,7 @@ function Escena({ ctx }: { ctx: Contexto }) {
     };
     addEventListener("keydown", alPresionar, { capture: true });
     return () => removeEventListener("keydown", alPresionar, { capture: true });
-  }, [presets]);
+  }, []);
 
   // --- Textos ---
   const { conc, total, obs } = calculo;
@@ -373,13 +364,14 @@ function Escena({ ctx }: { ctx: Contexto }) {
     </>
   ) : v.lente === "neto" ? (
     <>
-      Veces más (o menos) accidentes que la zona típica, descontando cuánto reporta cada municipio. Compara zonas{" "}
+      Cuántas veces más (o menos) accidentes tiene cada zona que la zona típica de la ciudad, una vez descontado
+      cuánto reporta su municipio. Compara zonas{" "}
       <strong className="font-bold text-enfasis-texto">dentro de un mismo municipio</strong>; no cambia con el año.
     </>
   ) : proy ? (
     <>
-      El mapa muestra el valor central de cada hexágono; la incertidumbre está en la banda de la gráfica, y crece con
-      cada año de proyección.
+      El mapa muestra el valor central de cada hexágono; la incertidumbre está en la banda de la gráfica. Supone que
+      cada municipio sigue reportando como en 2024.
     </>
   ) : (
     <>Cada hexágono mide 0.65 km². Resalta el top del territorio para ver cuánto se concentran los accidentes.</>
@@ -389,102 +381,95 @@ function Escena({ ctx }: { ctx: Contexto }) {
     v.lente === "crudo"
       ? [...[0, 1, 10, 100].filter((x) => x <= ctx.maxCrudo).map((x): [number, string] => [tCrudo(x), String(x)]),
          [1, `${Math.round(ctx.maxCrudo)}+`]]
-      : [0.1, 0.3, 1, 3, 10, 30].filter((x) => x >= ctx.netoLo && x <= ctx.netoHi).map((x): [number, string] => [tNeto(x), `×${x}`]);
+      : [[0, "10× menos"], [tNeto(1), "igual"], [1, "10× más"]];
   const tituloLeyenda =
     v.lente === "crudo"
       ? proy ? "Accidentes esperados por hexágono" : "Accidentes por hexágono"
-      : "Riesgo propio: veces la zona típica";
+      : "Comparado con la zona típica";
 
-  // Lo que se compara: el escenario del estado actual, aunque se esté viendo el «antes».
-  const etiquetaEscenario = e.actual.etiqueta;
-  const comparando = e.referencia !== null;
 
   return (
-    <div className="flex min-h-dvh flex-col md:grid md:h-dvh md:grid-cols-[minmax(22rem,29rem)_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden">
+    <div className="flex min-h-dvh flex-col md:relative md:block md:h-dvh md:overflow-hidden">
       {/* --- Tarjeta: cifra, serie y explicación --- */}
-      <aside className="order-2 p-3 md:order-none md:overflow-y-auto md:p-4 md:pr-0">
-        <Card className="min-h-full gap-4 [--card-spacing:--spacing(6)]">
-          <CardHeader>
-            <p className="text-xs font-semibold tracking-[0.18em] text-primary uppercase">GeoStats · ATUS-INEGI</p>
-            <CardTitle className="text-lg leading-tight font-bold">Accidentes viales en la Zona Metropolitana de Monterrey</CardTitle>
-          </CardHeader>
-          <Separator />
-          <CardContent className="flex flex-1 flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-5xl font-bold tracking-tight tabular-nums">{v.anio}</span>
-                <Badge variant={proy ? "default" : "secondary"}>{proy ? "Proyección" : "Observado"}</Badge>
+      {/* Flota sobre el mapa y entra y sale con un translate: el mapa no
+          cambia de tamaño, así que esconderla no lo mueve, solo destapa lo
+          que estaba debajo. El asa viaja con ella. */}
+      <aside
+        ref={tarjetaRef}
+        className={cn(
+          "order-2 md:absolute md:inset-y-0 md:left-0 md:z-30 md:w-[29rem]",
+          "md:transition-transform md:duration-300 md:ease-out motion-reduce:md:transition-none",
+          !tarjeta && "md:-translate-x-full",
+        )}
+      >
+        <div className="hidden md:absolute md:top-5 md:right-0 md:block md:translate-x-[calc(100%+0.75rem)]">
+          <BotonIcono
+            etiqueta={tarjeta ? "Esconder el panel (T)" : "Mostrar el panel (T)"}
+            onClick={() => setTarjeta((t) => !t)}
+          >
+            {tarjeta ? <PanelLeftCloseIcon /> : <PanelLeftOpenIcon />}
+          </BotonIcono>
+        </div>
+        <div className="p-3 md:h-full md:overflow-y-auto md:p-4 md:pr-0">
+          <Card className="min-h-full gap-4 [--card-spacing:--spacing(6)]">
+            <CardHeader>
+              <p className="text-xs font-semibold tracking-[0.18em] text-primary uppercase">GeoStats · ATUS-INEGI</p>
+              <CardTitle className="text-lg leading-tight font-bold">Accidentes viales en la Zona Metropolitana de Monterrey</CardTitle>
+            </CardHeader>
+            <Separator />
+            <CardContent className="flex flex-1 flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-5xl font-bold tracking-tight tabular-nums">{v.anio}</span>
+                  <Badge variant={proy ? "default" : "secondary"}>{proy ? "Proyección" : "Observado"}</Badge>
+                </div>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-1">
-              <Cifra valor={obs ?? redondear(total.p50)} />
-              <p className="text-sm text-muted-foreground">
-                {proy ? (
-                  <>
-                    accidentes esperados · entre{" "}
-                    <span className="font-mono text-foreground">{miles.format(redondear(total.p5))}</span> y{" "}
-                    <span className="font-mono text-foreground">{miles.format(redondear(total.p95))}</span> (90 %)
-                  </>
-                ) : (
-                  "accidentes reportados en la zona metropolitana"
-                )}
-              </p>
-            </div>
+              <div className="flex flex-col gap-1">
+                <Cifra valor={obs ?? redondear(total.p50)} />
+                <p className="text-sm text-muted-foreground">
+                  {proy ? (
+                    <>
+                      accidentes esperados · entre{" "}
+                      <span className="font-mono text-foreground">{miles.format(redondear(total.p5))}</span> y{" "}
+                      <span className="font-mono text-foreground">{miles.format(redondear(total.p95))}</span> (90 %)
+                    </>
+                  ) : (
+                    "accidentes reportados en la zona metropolitana"
+                  )}
+                </p>
+              </div>
 
-            <p className="text-base leading-snug">{frase}</p>
+              <p className="text-base leading-snug">{frase}</p>
 
-            <figure className="flex flex-col gap-2">
-              <figcaption className="text-sm font-semibold">Total por año, 2019-2027</figcaption>
-              <svg ref={serieRef} className="w-full overflow-visible" role="img" aria-label="Total de accidentes por año con su intervalo del 90 %" />
-              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full bg-foreground" /> reportado
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-0.5 w-5 rounded-full bg-datos" /> mediana
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-3 w-5 rounded-sm bg-banda/25" /> 90 %
-                </span>
-                {comparando && (
+              <figure className="flex flex-col gap-2">
+                <figcaption className="text-sm font-semibold">Total por año, 2019-2027</figcaption>
+                <svg ref={serieRef} className="w-full overflow-visible" role="img" aria-label="Total de accidentes por año con su intervalo del 90 %" />
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5">
-                    <span className="h-0 w-5 border-t-2 border-dotted border-foreground/60" /> {e.viendoReferencia ? "después" : "antes"}
+                    <span className="size-2.5 rounded-full bg-foreground" /> reportado
                   </span>
-                )}
-              </div>
-            </figure>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-0.5 w-5 rounded-full bg-datos" /> mediana
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-3 w-5 rounded-sm bg-banda/25" /> 90 %
+                  </span>
+                </div>
+              </figure>
 
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-semibold">Cómo proyectar 2025-2027</p>
-              <ToggleGroup
-                variant="marca"
-                spacing={0}
-                value={[v.proyeccion]}
-                onValueChange={(x) => x[0] && despachar({ tipo: "proyeccion", proyeccion: x[0] as Proyeccion })}
-                aria-label="Forma de proyectar"
-              >
-                <ToggleGroupItem value="estable">Si nada cambia</ToggleGroupItem>
-                <ToggleGroupItem value="cambios">Si cambia el reporte</ToggleGroupItem>
-              </ToggleGroup>
-              <p className="text-sm leading-snug text-muted-foreground">
-                {v.proyeccion === "estable"
-                  ? "Cada municipio sigue reportando como en 2024. Es el supuesto con el que se validó el modelo: acertó el total de 2024 con 1 % de error."
-                  : "Los municipios pueden empezar o dejar de reportar, como pasó entre 2019 y 2024: por eso la banda se abre. La mediana sube por esa asimetría, no porque se esperen más accidentes."}
+            </CardContent>
+            <CardFooter className="py-2 text-xs text-muted-foreground">
+              <p>
+                Modelo de accidentes reportados. ATUS-INEGI, 2019-2024.
               </p>
-            </div>
-
-          </CardContent>
-          <CardFooter className="py-2 text-xs text-muted-foreground">
-            <p>
-              Modelo de accidentes <b className="text-foreground">reportados</b>, no de siniestralidad. ATUS-INEGI, 2019-2024.
-            </p>
-          </CardFooter>
-        </Card>
+            </CardFooter>
+          </Card>
+        </div>
       </aside>
 
       {/* --- Mapa, con los controles flotando encima --- */}
-      <section className="relative order-1 flex flex-col md:order-none md:min-h-0">
+      <section className="relative order-1 flex flex-col md:absolute md:inset-0 md:order-none md:min-h-0">
         <div ref={cajaRef} className="relative h-[85vw] max-h-[65vh] min-h-72 md:absolute md:inset-0 md:h-auto md:max-h-none">
           {/* MapLibre le pone position: relative a su contenedor: por eso va
               dentro de otra caja absoluta. Ocultar las calles solo apaga su
@@ -554,31 +539,17 @@ function Escena({ ctx }: { ctx: Contexto }) {
               modelo={modelo}
             />
           )}
-          <div
-            className={cn(
-              "absolute inset-0 z-10 flex flex-col items-center justify-center gap-8 bg-background/85 p-10 backdrop-blur-sm transition-opacity duration-300",
-              e.pregunta ? "opacity-100" : "pointer-events-none opacity-0",
-            )}
-            aria-hidden={!e.pregunta}
-          >
-            <p className="max-w-4xl text-center font-serif text-6xl leading-tight font-semibold text-enfasis-texto italic">
-              {e.pregunta?.pregunta}
-            </p>
-            <div className="flex items-center gap-3">
-              <Button size="lg" onClick={() => despachar({ tipo: "revelar" })}>
-                Revelar <Kbd className="bg-primary-foreground/20 text-primary-foreground">Espacio</Kbd>
-              </Button>
-              <Button size="lg" variant="ghost" onClick={() => despachar({ tipo: "quitarEscenario" })}>
-                Cancelar
-              </Button>
-            </div>
-          </div>
         </div>
 
         <div
-          className="order-first flex flex-wrap items-start justify-between gap-3 p-3 md:pointer-events-none md:absolute md:inset-x-0 md:top-0 md:z-20 md:p-5"
+          className={cn(
+            "order-first flex flex-wrap items-start justify-between gap-3 p-3 md:pointer-events-none md:absolute md:inset-x-0 md:top-0 md:z-20 md:p-5",
+            "md:transition-[padding] md:duration-300 md:ease-out motion-reduce:md:transition-none",
+            // Hueco para el asa de la tarjeta y, si está a la vista, para la tarjeta.
+            tarjeta ? "md:pl-[32.75rem]" : "md:pl-[3.75rem]",
+          )}
         >
-          <div className="flex flex-col items-start gap-3 md:pointer-events-auto">
+          <div className="md:pointer-events-auto">
             <div ref={cabRef}>
               <ToggleGroup
                 variant="marca"
@@ -593,67 +564,9 @@ function Escena({ ctx }: { ctx: Contexto }) {
                 <ToggleGroupItem value="neto">Riesgo</ToggleGroupItem>
               </ToggleGroup>
             </div>
-            {(etiquetaEscenario || comparando) && (
-              <Alert className="max-w-md shadow-sm">
-                <FlaskConicalIcon />
-                <AlertTitle>{etiquetaEscenario ?? "Comparación fijada"}</AlertTitle>
-                <AlertDescription className="flex flex-col gap-3">
-                  {e.actual.escenario && (
-                    <span>Cambia cómo reporta el municipio, no cuántos accidentes ocurren. Actúa desde 2025.</span>
-                  )}
-                  <div className="flex flex-wrap items-center gap-2">
-                    {comparando && (
-                      <ToggleGroup
-                        variant="marca"
-                        size="xl"
-                        spacing={0}
-                        value={[e.viendoReferencia ? "antes" : "despues"]}
-                        onValueChange={(x) => x[0] && despachar({ tipo: "verReferencia", ver: x[0] === "antes" })}
-                        aria-label="Antes o después"
-                      >
-                        <ToggleGroupItem value="antes" className="font-bold tracking-widest">ANTES</ToggleGroupItem>
-                        <ToggleGroupItem value="despues" className="font-bold tracking-widest">DESPUÉS</ToggleGroupItem>
-                      </ToggleGroup>
-                    )}
-                    <Button variant="ghost" onClick={() => despachar({ tipo: "quitarEscenario" })}>
-                      <XIcon data-icon="inline-start" />
-                      Quitar
-                    </Button>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 md:pointer-events-auto">
-            <Popover open={menu} onOpenChange={setMenu}>
-              <PopoverTrigger render={<Button variant="outline" size="lg" />}>
-                <FlaskConicalIcon data-icon="inline-start" />
-                Escenarios
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-96">
-                <PopoverHeader>
-                  <PopoverTitle>¿Qué pasaría si…?</PopoverTitle>
-                  <PopoverDescription>Primero aparece la pregunta; la respuesta se revela con Espacio.</PopoverDescription>
-                </PopoverHeader>
-                <div className="flex flex-col gap-1">
-                  {presets.map((p) => (
-                    <Button
-                      key={p.tecla}
-                      variant="ghost"
-                      className="h-auto justify-start gap-3 py-2 text-left whitespace-normal"
-                      onClick={() => {
-                        setMenu(false);
-                        despachar({ tipo: "lanzar", preset: p });
-                      }}
-                    >
-                      <Kbd>{p.tecla}</Kbd>
-                      {p.pregunta}
-                    </Button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
             <Button variant="outline" size="lg" onClick={() => setGuia(true)}>
               <BookOpenIcon data-icon="inline-start" />
               Cómo leer esto
@@ -669,7 +582,12 @@ function Escena({ ctx }: { ctx: Contexto }) {
 
         <div
           ref={pieRef}
-          className="flex flex-wrap items-end justify-between gap-4 p-3 md:pointer-events-none md:absolute md:inset-x-0 md:bottom-0 md:z-20 md:p-5"
+          className={cn(
+            "flex flex-wrap items-end justify-between gap-4 p-3 md:pointer-events-none md:absolute md:inset-x-0 md:bottom-0 md:z-20 md:p-5",
+            "md:transition-[padding] md:duration-300 md:ease-out motion-reduce:md:transition-none",
+            // Hueco para el asa de la tarjeta y, si está a la vista, para la tarjeta.
+            tarjeta ? "md:pl-[32.75rem]" : "md:pl-[3.75rem]",
+          )}
         >
           <div className="flex flex-wrap items-end gap-4 md:pointer-events-auto">
             <div className="flex flex-wrap items-end gap-2">

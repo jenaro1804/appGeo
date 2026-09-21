@@ -10,7 +10,7 @@
 //
 // Dos canvas: `hex` lleva solo los rellenos (su opacidad la controla la
 // interfaz, para ver las calles debajo) y `capa` todo lo que debe seguir
-// visible: contornos, top N, escenario, rótulos y el hexágono bajo el mouse.
+// visible: contornos, top N, rótulos y el hexágono bajo el mouse.
 
 import { colorDe, PALETA } from "./color";
 import type { Datos } from "./datos";
@@ -81,8 +81,6 @@ class Animado {
 
 export class Mapa {
   hover: number | null = null;
-  /** Municipios que cambian en el escenario activo: su contorno va en rojo. */
-  resaltados = new Set<number>();
   etiquetas = true;
   /** Familia de los rótulos; con next/font se lee de --font-montserrat. */
   fuente = "Montserrat, 'Segoe UI', sans-serif";
@@ -327,9 +325,6 @@ export class Mapa {
     c.globalAlpha = 0.5;
     this.contornos.forEach((q) => c.stroke(q));
     c.globalAlpha = 1;
-    c.strokeStyle = p.enfasis;
-    c.lineWidth = (4 * u) / s;
-    for (const j of this.resaltados) c.stroke(this.contornos[j]);
 
     if (this.hover !== null) {
       c.strokeStyle = p.texto;
@@ -346,13 +341,12 @@ export class Mapa {
       c.lineWidth = 4 * u;
       c.strokeStyle = p.halo;
       c.fillStyle = p.texto;
-      // Primero los municipios del escenario, luego los de más accidentes; un
-      // rótulo que se encimaría con uno ya puesto se omite (a escala chica,
-      // Guadalupe y Monterrey no caben juntos).
+      // Primero los municipios con más accidentes (this.rotulos ya viene en
+      // ese orden); un rótulo que se encimaría con uno ya puesto se omite (a
+      // escala chica, Guadalupe y Monterrey no caben juntos).
       const alto = 0.8 * this.rem;
       const puestos: [number, number, number, number][] = [];
-      const orden = [...this.rotulos].sort((a, b) => Number(this.resaltados.has(b.j)) - Number(this.resaltados.has(a.j)));
-      for (const r of orden) {
+      for (const r of this.rotulos) {
         const x = r.x * s + tx;
         const y = r.y * s + ty;
         const w = c.measureText(r.texto).width / 2 + 2 * u;

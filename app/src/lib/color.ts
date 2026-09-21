@@ -60,7 +60,7 @@ export interface Paleta {
   /** Degradado CSS de la rampa, para la leyenda. */
   gradiente: string;
   texto: string;
-  /** Contorno de los municipios del escenario y del top N. */
+  /** Contorno del top N del territorio. */
   enfasis: string;
   /** Halo detrás de los rótulos, para que se lean sobre cualquier celda. */
   halo: string;

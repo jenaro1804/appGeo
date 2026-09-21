@@ -8,20 +8,57 @@
 // porque tocan `window` al importarse y la página se prerenderiza.
 
 import { type Flavor, layers, namedFlavor } from "@protomaps/basemaps";
-import type { Map as MapaML, StyleSpecification } from "maplibre-gl";
+import type { LngLatLike, Map as MapaML, StyleSpecification } from "maplibre-gl";
 import type { Camara, Relleno } from "./mapa";
 
 export type MapLibre = typeof import("maplibre-gl");
 
 /**
- * Hasta dónde se puede arrastrar el mapa. El recorte de calles es
- * -100.78, 25.28, -99.72, 26.40; los límites son más amplios porque MapLibre
- * exige que toda la pantalla quepa dentro de ellos, y con límites justos en
- * una pantalla ancha forzaba un zoom mayor que el del encuadre.
+ * Límites de arranque, hasta que `limitar()` mide la caja: amplios a
+ * propósito, porque MapLibre exige que toda la pantalla quepa dentro.
  */
 const LIMITES: [[number, number], [number, number]] = [[-103, 24], [-97.5, 27.7]];
 
 export const ATRIBUCION = "© OpenStreetMap · Protomaps";
+
+// --- Hasta dónde se deja ver -------------------------------------------------
+// Web Mercator normalizado (0-1), el mismo sistema de la cámara de lib/mapa.ts.
+
+const mercX = (lon: number) => (lon + 180) / 360;
+const mercY = (lat: number) => 0.5 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / (2 * Math.PI);
+const lonDe = (x: number) => x * 360 - 180;
+const latDe = (y: number) => (Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180) / Math.PI;
+/** LngLatLike admite tupla, {lng,lat} y {lon,lat}; aquí todo sale en tupla. */
+const enTupla = (p: LngLatLike): [number, number] =>
+  Array.isArray(p) ? [p[0], p[1]] : "lng" in p ? [p.lng, p.lat] : [p.lon, p.lat];
+
+/**
+ * Ata el mapa a la ZMM: **el encuadre es lo más lejos que se puede ver**, y no
+ * se puede arrastrar más allá de lo que se ve desde ahí (con 10 % de holgura).
+ * Alejarse más enseñaba el borde del recorte de calles.
+ *
+ * Se vuelve a llamar con cada cambio de tamaño, incluido esconder la tarjeta:
+ * el encuadre de una caja más ancha es otro zoom.
+ */
+export function limitar(mapa: MapaML, extension: [[number, number], [number, number]], relleno: Relleno, ancho: number, alto: number) {
+  const camara = mapa.cameraForBounds(extension, {
+    padding: { top: relleno.arr, bottom: relleno.aba, left: relleno.izq, right: relleno.der },
+  });
+  if (camara?.zoom == null || camara.center == null) return;
+  const z = camara.zoom;
+  const [lon, lat] = enTupla(camara.center);
+  // Medio ancho y medio alto de lo que se ve a ese zoom, más 10 %: al encuadre
+  // le queda un poco de arrastre y, acercándose, se recorre toda la zona.
+  const mx = (0.55 * ancho) / (512 * 2 ** z);
+  const my = (0.55 * alto) / (512 * 2 ** z);
+  const cx = mercX(lon);
+  const cy = mercY(lat);
+  mapa.setMaxBounds([
+    [lonDe(cx - mx), latDe(Math.min(1, cy + my))],
+    [lonDe(cx + mx), latDe(Math.max(0, cy - my))],
+  ]);
+  mapa.setMinZoom(z); // si el mapa estaba más lejos, MapLibre lo acerca solo
+}
 
 /**
  * El sabor `grayscale` de Protomaps, aclarado. De fábrica la tierra es
@@ -32,7 +69,9 @@ export const ATRIBUCION = "© OpenStreetMap · Protomaps";
  */
 const CLARO: Flavor = {
   ...namedFlavor("grayscale"),
-  background: "#e6e6e6",
+  // El fondo es lo que se ve donde no hay mosaicos. Del color de la tierra,
+  // para que el borde del recorte no se lea como un cuadro gris.
+  background: "#f2f2f2",
   earth: "#f2f2f2",
   park_a: "#e9e9e9",
   park_b: "#e9e9e9",
@@ -144,6 +183,7 @@ export function crearMapaBase(
     style: estilo(),
     bounds: extension,
     fitBoundsOptions: { padding: { top: relleno.arr, bottom: relleno.aba, left: relleno.izq, right: relleno.der } },
+    // Los límites de verdad los pone limitar(), en cuanto se mide la caja.
     maxBounds: LIMITES,
     minZoom: 8,
     maxZoom: 17.5,

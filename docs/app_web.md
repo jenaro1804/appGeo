@@ -4,14 +4,18 @@ Documento de continuidad: qué se está construyendo, qué decisiones ya se
 tomaron y por qué, y qué falta. Escrito para que otra sesión pueda retomar sin
 contexto previo.
 
-Última actualización: 2026-09-19.
+Última actualización: 2026-09-20.
 
-**Dónde quedó:** el rediseño está implementado (shadcn/ui, mapa a pantalla
-completa, interruptor de proyección, guía «Cómo leer esto») y encima un **mapa base de calles** con zoom y arrastre, sin
-internet. Todo **sin commit y sin que el autor lo haya visto a pantalla
-completa**. Lo siguiente: que lo revise en el proyector, ajustar, hacer el
-commit y resolver los datos del deploy (ver
-[«Pendientes»](#pendientes-para-la-siguiente-sesión)).
+**Dónde quedó:** el rediseño y el mapa base ya están en git (con
+`app/public/datos/` y `app/public/mapa/` versionados) y la app está
+desplegada en Vercel. El **2026-09-20 la app se redujo a dos cosas**: el mapa
+por año (accidentes o riesgo propio) y la serie con la proyección de
+persistencia. Se quitaron, por decisión del autor, la proyección con
+innovaciones y **todo el bloque de escenarios** (pregunta → revelar,
+antes/después, el menú y `escenarios.ts`). Ese mismo día se agregó el botón
+(y la tecla `T`) que **esconde la tarjeta** y se le puso tope al **alejamiento
+del mapa**, para no ver el borde del recorte de calles. Lo siguiente está en
+[«Pendientes»](#pendientes-para-la-siguiente-sesión).
 
 ## Qué se quiere
 
@@ -20,9 +24,10 @@ Una página web que muestre el mapa de riesgo del modelo jerárquico
 cambia.
 
 **Escenario de uso principal:** el autor la proyecta desde su laptop frente a
-un público. Él mueve los controles; el público solo mira. La dinámica prevista
-es preguntar *«¿qué creen que pase si…?»*, dejar que especulen, y entonces
-mover el parámetro para revelar la respuesta.
+un público. Él mueve los controles; el público solo mira. La dinámica de
+*«¿qué creen que pase si…?»* → revelar existió hasta el 2026-09-20 y se quitó
+(ver «Decisiones tomadas»): lo que se muestra ahora es el mapa por año y el
+riesgo propio, y el relato lo pone quien presenta.
 
 **Escenario secundario (nuevo):** publicarla en internet (Vercel) para que la
 gente la use por su cuenta, «como algo sofisticado». No es parte del alcance
@@ -35,11 +40,12 @@ De ahí se derivan las restricciones:
   celular basta con que se apile y funcione.
 - **El operador es experto.** No hace falta proteger la interfaz de un
   desconocido con prisa; los controles pueden ser densos en información.
-- **El momento de revelar es el producto.** La transición entre estados tiene
-  que verse (animación corta, no salto), y debe existir un antes/después para
-  que la comparación no dependa de la memoria del público.
-- **Escenarios como botones y atajos de teclado**, no solo sliders: hay que
-  poder llegar al estado exacto de un clic mientras se habla.
+- **Las transiciones se ven.** Cambiar de año o de lente se anima (~650 ms),
+  no salta; con «reducir movimiento» del sistema, es inmediato.
+- **Todo con atajos de teclado**, para llegar al estado exacto mientras se
+  habla, sin buscar el mouse.
+  (El antes/después y los escenarios cubrían la misma necesidad y se
+  quitaron el 2026-09-20.)
 
 ## Decisiones tomadas
 
@@ -59,6 +65,35 @@ tokens de shadcn están mapeados a los colores del manual en `globals.css`
 (`--primary` = `#005991`, `--chart-*` = la rampa ordinal). Se agregó una variante propia de `Toggle`, `marca`: la opción elegida
 va en azul lleno, porque el `bg-muted` de fábrica no se distingue desde el
 fondo de la sala.
+
+**La tarjeta flota sobre el mapa y se esconde (2026-09-20).** Se quitó el
+grid de dos columnas: el mapa ocupa siempre la pantalla completa y la tarjeta
+va encima, en `absolute`. Con el asa de su borde derecho (o la tecla `T`)
+entra y sale con un `translate`. **Esconderla no mueve el mapa**, que era el
+punto: el mapa no cambia de tamaño, solo se destapa lo que ya estaba dibujado
+debajo.
+
+Para que no se moviera hubo que separar dos cosas que antes iban juntas:
+
+- `medir()` guarda una firma con el tamaño del mapa y los rellenos de arriba,
+  abajo y la derecha —los controles flotantes— y **solo reencuadra si esa
+  firma cambia**. El relleno de la izquierda (la tarjeta) queda fuera a
+  propósito, así que abrir o cerrar no reencuadra ni recalcula `limitar()`.
+- El encuadre sí esquiva la tarjeta cuando toca reencuadrar: `relleno().izq`
+  mide dónde está el `<aside>` de verdad (`getBoundingClientRect`), no el
+  estado de React, porque también se lee a media animación.
+
+Los controles del mapa sí se recorren: las barras de arriba y abajo animan su
+`padding-left` entre `3.75rem` (el hueco del asa) y `32.75rem` (tarjeta más
+asa). Se anima el relleno y no un `transform` porque el relleno deja menos
+espacio y los grupos se apilan solos; con `transform`, a 1024 px el grupo de
+los años conservaba su ancho y se encimaba con la leyenda.
+
+Cuidado al tocar esto: en Chrome, `grid-template-columns` no interpola cuando
+la lista lleva `minmax()` (la transición se queda congelada a medio camino),
+y **en una pestaña de fondo las transiciones CSS no avanzan**, igual que
+`requestAnimationFrame`: desde la automatización hay que apagarlas
+(`style.transition = "none"`) para medir el estado final.
 
 **Tamaño fluido en rem.** Todo está en rem y el rem de `<html>` crece con la
 pantalla (`min(1.04vw, 1.85vh)`, 20 px a 1920×1080; 16 px fijos en celular).
@@ -82,7 +117,7 @@ web, para ver qué calles y cruces caen en cada hexágono. Decisiones:
   inclinación, mover y hacer zoom en Web Mercator es escalar y trasladar: los
   hexágonos se construyen una vez y cada cuadro solo cambia la
   transformación. Así se conservan intactas las animaciones, el top N, los
-  contornos del escenario y el tooltip.
+  contornos, el top N y el tooltip.
 - **Sin internet:** los mosaicos son un recorte de Protomaps solo de la ZMM
   (`public/mapa/zmm.pmtiles`, 25 MB, zoom 0-15; más allá de 15 MapLibre
   amplía los del 15). Las tipografías del mapa (Noto Sans, solo los rangos
@@ -97,17 +132,54 @@ web, para ver qué calles y cruces caen en cada hexágono. Decisiones:
   hexágonos (en 0 % solo quedan calles, contornos y rótulos). Ocultar los
   hexágonos no lleva botón aparte: el deslizador ya lo hace. Teclas: + −, E,
   B, H.
+- **El encuadre es lo más lejos que se puede ver (2026-09-20).** `limitar()`
+  en `lib/mapaBase.ts` pone `minZoom` en el zoom que `cameraForBounds` da
+  para la extensión de los hexágonos con el relleno de los controles, y
+  `maxBounds` en lo que se ve desde ahí más 10 %. Se recalcula cuando cambia
+  la firma de `medir()` (tamaño del mapa y controles), no al esconder la
+  tarjeta. Antes se podía alejar hasta
+  ver el borde del recorte de calles.
+- **El fondo del estilo es el color de la tierra** (`#F2F2F2`, antes
+  `#E6E6E6`): donde no hay mosaicos ya no se dibuja un cuadro gris, solo
+  sigue el mismo claro. Hace falta porque **«nunca ver el borde» y «ver toda
+  la ZMM» no caben juntos con este recorte**: los mosaicos guardados son los
+  que tocan la caja `-100.78,25.28,-99.72,26.40`, y su unión mide 1.41° de
+  alto a zoom 9 y 1.41° a zoom 10, contra los 1.007° de la ZMM más el
+  relleno; en una pantalla 16:9 a pantalla completa, el encuadre necesita
+  ~1.48° de alto. Faltan ~5 %. Para cerrarlo de verdad hay que **regenerar el
+  recorte con una caja más amplia** (ver «Mapa base»; pide internet y el CLI
+  de Protomaps).
 - **Los UTM se convierten en el cliente** (`lib/geo.ts`, UTM inversa sin
   dependencias), no en el export: el contrato de datos no cambió. La fórmula
   coincide con pyproj a menos de 1e-9° (prueba en `pruebas/geo.test.ts`).
 - **Atribución:** la licencia de OpenStreetMap pide citarla mientras se ve el
   mapa; va en la leyenda y desaparece si se ocultan las calles.
 
-**Dos modelos en memoria, uno por forma de proyectar.** «Si nada cambia»
-(persistencia, `innovaciones: false`) es el estado inicial, porque es lo que
-validó el notebook; «si cambia el reporte» (innovaciones *t*) es la
-revelación. En 2019-2024 dan exactamente lo mismo. El eje de la serie es
-común a los dos, para que el cambio se vea como cambio de datos.
+**Una sola forma de proyectar: persistencia (decidido 2026-09-20).** La app
+usa `Modelo(datos, { innovaciones: false })` y nada más: cada municipio sigue
+reportando como en 2024, que es lo que validó el notebook. Se quitó el
+interruptor «Si nada cambia | Si cambia el reporte», su tecla `P`, el
+escenario 5 y `Vista.proyeccion`. **Consecuencia:** 2025, 2026 y 2027 dan
+exactamente la misma cifra y la misma banda (71,269 / 73,645 / 76,068), así
+que la serie sale plana desde 2024 y el intervalo ya no se ensancha con el
+horizonte. `modelo.ts`
+conserva la opción `innovaciones` (con sus pruebas y las 200 trayectorias):
+la máquina sigue ahí por si se quiere recuperar la historia, pero la interfaz
+no la expone.
+
+**Sin escenarios (decidido 2026-09-20).** Se quitó el bloque completo: los
+cinco (luego cuatro) escenarios preparados, el menú, la pregunta a pantalla
+completa con «Revelar», el aviso flotante, el antes/después (teclas `F` y
+`A`) y `src/lib/escenarios.ts`. Con eso, `Estado` se quedó en
+`{ actual: { anio, lente }, top, ayuda, etiquetas }` y `mapa.ts` perdió
+`resaltados`. **Consecuencia:** la app ya no tiene nada que mover en
+2025-2027; los tres años proyectados muestran la misma cifra. Lo que queda es
+el mapa por año, el interruptor Accidentes/Riesgo, el top N, el mapa base y la
+serie. La maquinaria del contrafactual sigue viva en `modelo.ts`
+(`Escenario`, el parámetro `esc` de `totales`/`medianas`/`celda`) y la
+referencia de numpy la sigue probando; también sigue el parámetro
+`referencia` de `serie.ts` (la línea punteada del «antes»). Para recuperar
+la interfaz: `0117636` y anteriores.
 
 **Ajuste con los seis años (2019-2024), no con la partición del notebook.** El
 notebook entrena con 2019-2023 y reserva 2024 para validar; esa pregunta ya se
@@ -124,7 +196,8 @@ futuro. Si la app calcula promedios da números absurdos que cambian con la
 semilla. Esta regla es la que más fácil se rompe por descuido; hay una prueba
 que la vigila.
 
-**200 trayectorias de innovación por muestra.** Con una sola por muestra (250
+**200 trayectorias de innovación por muestra** (vigente solo dentro de
+`modelo.ts`, ver arriba)**.** Con una sola por muestra (250
 escenarios), el p95 del total de 2027 variaba de 172 a 321 mil según la
 semilla: las colas de la *t₃* quedaban mal muestreadas. Con 200 (50,000
 escenarios) queda en 221-225 mil con cualquier semilla, y hay una prueba que lo
@@ -168,8 +241,9 @@ log mu[i,s] = b0[s] + m[j(i), año, s] + u[i,s]
 conteo ~ BinomialNegativa(mu, theta[s])
 ```
 
-- **Escenario municipal.** Cambiar el régimen del municipio `j` es sumar un
-  desplazamiento `delta[j,s]` a `m`. Para «que reporte como en 2021»:
+- **Escenario municipal** (ya no se usa en la interfaz; sigue en `modelo.ts`).
+  Cambiar el régimen del municipio `j` es sumar un desplazamiento
+  `delta[j,s]` a `m`. Para «que reporte como en 2021»:
   `delta[j,s] = m[j, 2021, s] - m[j, 2024, s]`, por muestra. O un factor fijo
   (`log factor`). **Solo actúa en 2025-2027**: es un cambio de régimen hacia
   adelante.
@@ -185,21 +259,39 @@ conteo ~ BinomialNegativa(mu, theta[s])
   identificado). Se lee como «veces la celda típica». No depende del año ni
   del escenario.
 
+**La escala del mapa de riesgo (2026-09-20).** El dominio de color es fijo,
+`0.1` a `10`, no los percentiles 2 y 98 de la distribución (que son 0.04 y
+14.4). Así el 1 —la zona típica— cae en el centro exacto de la rampa y la
+leyenda se lee con tres palabras: **10× menos · igual · 10× más**, en vez de
+las marcas `×0.1 ×0.3 ×1 ×3 ×10` de antes, que obligaban al público a pensar
+en fracciones. Se satura el 10 % de celdas por debajo de 0.1 y el 5 % por
+encima de 10 (la distribución llega a ×45). El tooltip dice «3.4 veces más
+(o menos) que la zona típica», por lo mismo. La rampa es logarítmica porque
+el multiplicador cubre tres órdenes de magnitud: p2 = 0.04, mediana = 1.18,
+p95 = 9.9.
+
 ## Cifras que salen de la app (semilla 42)
+
+Con la proyección de persistencia, que es la única desde 2026-09-20:
 
 | | p5 | mediana | p95 |
 |---|---|---|---|
 | 2024 (observado: 71,249) | 71,269 | 73,645 | 76,068 |
-| 2025 | 57,680 | 77,553 | 121,778 |
-| 2026 | 54,598 | 82,550 | 168,154 |
-| 2027 | 53,058 | 88,071 | 225,432 |
+| 2025 | 71,269 | 73,645 | 76,068 |
+| 2026 | 71,269 | 73,645 | 76,068 |
+| 2027 | 71,269 | 73,645 | 76,068 |
 
-Ojo con la **mediana creciente**: no es que el modelo prevea más accidentes.
-Cada municipio tiene innovaciones simétricas, pero el total es una suma de
-exponenciales con colas pesadas: un municipio que empieza a reportar suma
-mucho, uno que deja de reportar resta poco. La mediana de la suma sube. Frente
-a público, esto se malinterpreta fácil como «los accidentes van a subir 23 %».
-Ver «Pendientes».
+Los tres años proyectados son idénticos por construcción: sin innovaciones el
+nivel municipal de 2024 persiste y solo queda el ruido Binomial Negativo del
+conteo. Con los escenarios también fuera, nada los distingue: la serie se ve
+plana de 2024 en adelante.
+
+Para referencia, lo que daba el modo con innovaciones que se quitó (sigue
+disponible en `modelo.ts`): 2025 = 77,553 (57,680-121,778), 2026 = 82,550
+(54,598-168,154), 2027 = 88,071 (53,058-225,432). Su mediana creciente no era
+una tendencia, sino la asimetría de una suma de exponenciales con colas
+pesadas; frente a público se malinterpretaba como «los accidentes van a subir
+23 %», y esa fue una de las razones para quitarlo.
 
 ## Cómo correr la app
 
@@ -222,8 +314,7 @@ compilar y las sirve la propia app, y el mapa base sale de `public/mapa/`.
 `public/mapa/maplibre/` (`scripts/copiar-maplibre.mjs`).
 
 Teclado (también con `?` dentro de la app): ← → año · Inicio/Fin 2019/2027 ·
-N accidentes↔riesgo · P proyección · ↑↓ top 1-20 % · 1-5 escenario preparado
-(pregunta) · Espacio revelar · F fijar «antes» · A alternar antes/después ·
+N accidentes↔riesgo · ↑↓ top 1-20 % · T esconder o mostrar la tarjeta ·
 M nombres · + − acercar/alejar · E encuadrar · B calles · H opacidad de los
 hexágonos · L cómo leer esto · 0/Esc volver al inicio. Mouse sobre
 un hexágono: sus cifras; rueda y arrastre: mover el mapa; clic en una columna
@@ -254,7 +345,7 @@ pmtiles extract https://build.protomaps.com/20260919.pmtiles app/public/mapa/zmm
 
 El teclado se escucha en captura: aunque el foco haya quedado en un botón
 tras un clic, las flechas y el espacio siguen siendo del presentador. Con un
-diálogo, la guía o el menú de escenarios abiertos, el teclado es de ellos.
+diálogo o la guía abiertos, el teclado es de ellos.
 
 ## Estructura de `app/`
 
@@ -268,7 +359,6 @@ app/
   src/lib/
     modelo.ts         aritmética del posterior (lo importante; probado contra numpy)
     estado.ts         estado de la escena y sus transiciones (función pura, probada)
-    escenarios.ts     escenarios preparados: DATOS, se editan sin tocar lógica
     datos.ts          contrato de datos y carga (fetch de public/datos/)
     azar.ts           PRNG con semilla, normal, t de Student
     color.ts          paleta del mapa: rampa del manual interpolada en OKLab
@@ -303,32 +393,20 @@ Hecho:
 - El export calcula R̂/ESS de log μ antes de aplanar las cadenas y agrega
   `x`/`y` UTM y `contornos.json`.
 - App en Next.js: mapa crudo/neto, años 2019-2027 con proyección, top N % con
-  frase de concentración, serie con banda del 90 % (recortada arriba con
-  etiqueta «↑225 mil»), escenarios con pregunta → revelar, antes/después,
-  tooltip, ayuda de teclado, animaciones de ~650 ms.
-- **Verificado:** 20 pruebas (la aritmética coincide con numpy a 1e-9; el
-  escenario solo actúa en proyecciones; el intervalo se ensancha; las colas no
-  dependen de la semilla; una muestra extrema no mueve la mediana; transiciones
-  del estado). `npm run build` y `npm run lint` limpios. En Chrome, con el
-  build de producción: carga, primer dibujo, y el flujo completo por teclado
-  (pregunta, revelar, alternar, años, top 5 %, neto, ayuda, reinicio) leyendo
-  el DOM.
-- **Rediseño (2026-09-19)**, sin commit. Mapa a pantalla completa con los
-  controles flotando: arriba «Accidentes | Riesgo» y los botones (escenarios,
-  guía, teclado, reinicio); abajo años, «Resaltar» y leyenda. A la
-  izquierda, una tarjeta con año, cifra, frase explicativa, serie e
-  interruptor de proyección con su explicación. El aviso del escenario
-  (con Antes/Después y Quitar) flota sobre la esquina del mapa y no lo mueve
-  al revelar. Rótulos de municipios sin encimarse (ganan los del escenario y
-  los de más accidentes). Respeta «reducir movimiento» del sistema.
-- **Verificado del rediseño:** 29 pruebas (9 nuevas del estado: proyección,
-  controles directos, quitar escenario), `lint` y `build` limpios. En Chrome
-  a 1920×855, con el servidor de desarrollo: los cinco escenarios, revelar,
-  antes/después, riesgo con top N, proyección con y sin innovaciones,
-  tooltip, menú de escenarios, guía, ayuda; nada se sale de la
-  pantalla; la tarjeta cabe en todos los estados medidos. En un iframe de
-  400 px: se apila sin scroll horizontal.
-- **Mapa base (2026-09-19)**, sin commit. Verificado en Chrome: las calles
+  frase de concentración, serie con banda del 90 %, tooltip, ayuda de teclado,
+  animaciones de ~650 ms.
+- **Rediseño (2026-09-19)**, en git (`155c6f7`). Mapa a pantalla completa con los
+  controles flotando: arriba «Accidentes | Riesgo» y los botones (guía,
+  teclado, reinicio); abajo años, «Resaltar» y leyenda. A la
+  izquierda, una tarjeta con año, cifra, frase explicativa, serie y el
+  supuesto de la proyección. Rótulos de municipios sin encimarse (ganan los
+  de más accidentes). Respeta «reducir movimiento» del sistema.
+- **Verificado del rediseño:** `lint` y `build` limpios. En Chrome
+  a 1920×855, con el servidor de desarrollo: riesgo con top N, proyección,
+  tooltip, guía, ayuda; nada se sale de la pantalla; la tarjeta cabe en todos
+  los estados medidos. En un iframe de 400 px: se apila sin scroll
+  horizontal.
+- **Mapa base (2026-09-19)**, en git (`155c6f7`, `a842cd4`). Verificado en Chrome: las calles
   se dibujan desde el recorte local, los hexágonos caen sobre ellas (el
   contorno Monterrey–San Pedro sigue el río Santa Catarina), el zoom con
   botones y teclado se conserva al cambiar el tamaño de la ventana, E
@@ -356,8 +434,8 @@ Decisiones del autor (en este orden):
    «veces la celda típica» metropolitana invita a comparar entre municipios,
    que es lo que el modelo separa peor.
    **Decidido (2026-09-19), dirección del rediseño:**
-   - Mapa a pantalla completa; cifra, serie, escenarios y controles flotan
-     encima en tarjetas. Arriba, un selector visible «Accidentes | Riesgo».
+   - Mapa a pantalla completa; cifra, serie y controles flotan encima en
+     tarjetas. Arriba, un selector visible «Accidentes | Riesgo».
    - ~~Tema claro y oscuro con interruptor.~~ Implementado y descartado: se
      quitó el tema oscuro.
    - Proyector primero; en celular basta con que se apile y funcione.
@@ -366,33 +444,25 @@ Decisiones del autor (en este orden):
    - Componentes con shadcn/ui (Tailwind 4) con los tokens mapeados al manual
      (`--primary` = `#005991`, `--chart-*` = la rampa ordinal). Serie: observado
      sólido, proyección punteada, banda tenue, etiquetas directas.
-2. **Proyección con o sin innovaciones.** Con innovaciones (actual): 2027 =
-   88 mil (53-225 mil), rango honesto pero ancho y con la mediana que sube por
-   asimetría. Sin ellas (persistencia, como validó el notebook): ~73,600
-   (71-76 mil) todos los años, pero el intervalo ya no se ensancha. La
-   recomendación fue dejar las innovaciones y añadir un texto que explique
-   por qué sube la mediana.
-   **Decidido (2026-09-19): interruptor en la app.** Primero «si nada cambia»
-   (persistencia) y luego «si los municipios cambian cómo reportan»
-   (innovaciones), como revelación en vivo. `Modelo` ya acepta
-   `{ innovaciones: false }`; basta una segunda instancia (con K = 1 es
-   barata). El texto de la mediana creciente sigue haciendo falta en el modo
-   con innovaciones. **Implementado.**
+2. ~~**Proyección con o sin innovaciones.**~~ **Cerrado (2026-09-20): solo
+   persistencia.** El interruptor se implementó el 2026-09-19 y el autor lo
+   descartó: la historia de «si cambia el reporte» se quita de la app. Queda
+   la proyección «si nada cambia», con la serie plana de 2024 a 2027 (ver
+   «Decisiones tomadas» y «Cifras que salen de la app»). Si alguna vez se
+   quiere recuperar: `modelo.ts` todavía acepta `{ innovaciones: true }`, y
+   habría que volver a meter `Vista.proyeccion`, la tecla `P` y el escenario
+   5 (están en `155c6f7`).
 3. ~~**¿Usable en celular?**~~ Decidido: proyector primero (ver 1).
-4. **Datos para el deploy.** Vercel construye desde git y `data/` está fuera
-   de git. Opciones: versionar `app/public/datos/` (~3 MB de datos públicos;
-   recomendado: el script ya usa esos archivos si `data/processed/app/` no
-   existe) o publicar desde la laptop con la CLI de Vercel. Hoy
-   `public/datos/` está en `app/.gitignore`.
+4. ~~**Datos para el deploy.**~~ Resuelto: `app/public/datos/` se versionó
+   (`acff1be`, ~3 MB) aunque siga listado en `app/.gitignore` (entró
+   forzado), así que Vercel construye desde git sin el pipeline de Python.
 5. ~~**Sección «cómo leer esto»**~~ Implementada como panel lateral (botón y
    tecla L), con los límites de «Lo que la app no debe afirmar». Falta el
    **enlace** al reporte técnico: hoy solo lo menciona, porque el PDF vive en
    el repo y no hay URL pública todavía.
 
-6. **¿Los 26 MB de `public/mapa/` van al repo?** Sin ellos la app no tiene
-   calles, y regenerarlos requiere internet y el CLI de Protomaps. GitHub
-   los acepta (el límite duro es 100 MB por archivo); Vercel también. La
-   recomendación es versionarlos junto con la decisión 4.
+6. ~~**¿Los 26 MB de `public/mapa/` van al repo?**~~ Resuelto: sí, se
+   versionaron (`a842cd4`).
 
 Trabajo:
 
@@ -403,11 +473,17 @@ Trabajo:
   archivo nuevo en el export y decidir desde qué zoom aparecen.
 - Revisión del autor del rediseño a pantalla completa, y ajustes.
 - Revisar a ojo las animaciones.
-- Ajustar los escenarios de `app/src/lib/escenarios.ts` a lo que se vaya a
-  contar (hoy: Guadalupe como en 2021, Santa Catarina como en 2020, periferia
-  norte al doble, 2027 si nada cambia, 2027 si cambia el reporte).
-- Deploy en Vercel.
-- Commit del rediseño: `app/` y este documento.
+- **Recorte de calles más amplio**, si se quiere que el borde no pueda verse
+  nunca (hoy se evita con el tope de zoom y con el fondo del color de la
+  tierra): `pmtiles extract --bbox=-101.6,24.7,-98.9,27.0`, que pesa más.
+- Decidir qué cuentan los años 2025-2027 ahora que son idénticos entre sí y
+  nada los mueve: si se quedan como están, si se muestra solo 2025, o si la
+  proyección sale de la app.
+- Limpieza pendiente por los recortes del 2026-09-20 (decidir si se borra o
+  se conserva por si vuelve): `innovaciones` y `Escenario` en `modelo.ts`
+  con sus pruebas y `pruebas/referencia.py`, y el parámetro `referencia` de
+  `serie.ts`.
+- Anotar aquí la URL del deploy de Vercel.
 
 ## Historial de tropiezos, para no repetirlos
 
@@ -480,11 +556,14 @@ Son los límites del modelo, y salen en cada notebook de la serie:
 
 - **Es un modelo de reportes, no de siniestralidad.** Un municipio que deja de
   capturar accidentes aparece como un municipio donde bajó el riesgo. El modelo
-  no distingue las dos cosas. (Está en el pie de la app.)
-- **La mediana creciente de la proyección no es una tendencia** (ver «Cifras
-  que salen de la app»).
-- **Los escenarios son contrafactuales de reporte**, no de seguridad vial:
-  «Guadalupe reporta como en 2021» no dice que haya más o menos accidentes.
+  no distingue las dos cosas. El pie de la app dice «modelo de accidentes
+  **reportados**» y el «no de siniestralidad» se quitó el 2026-09-20 por
+  decisión del autor; la frase completa sigue en «Cómo leer esto».
+- **La proyección no es un pronóstico de lo que va a pasar**: supone que cada
+  municipio sigue reportando como en 2024. Si un municipio cambia su reporte
+  —como ya pasó entre 2019 y 2024— el total real puede quedar fuera de la
+  banda. Por eso la banda no se ensancha con el horizonte: mide el ruido del
+  conteo, no el riesgo de un cambio de régimen.
 - **El modelo no mejora el *dónde*.** El PAI se queda en 8.4 en los tres
   notebooks: elegir el 5 % del territorio por puro historial ya captura el 42 %
   de los accidentes del año siguiente, y ninguna especificación lo mueve. Lo
