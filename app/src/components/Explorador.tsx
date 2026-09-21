@@ -14,15 +14,15 @@
 // acerca y se arrastra como un mapa web, y los hexágonos lo siguen.
 
 import {
-  BookOpenIcon, HexagonIcon, KeyboardIcon, MapIcon, MinusIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon,
-  RotateCcwIcon, ScanIcon, TriangleAlertIcon,
+  BookOpenIcon, ChevronDownIcon, ChevronUpIcon, HexagonIcon, KeyboardIcon, MapIcon, MinusIcon, PanelLeftCloseIcon,
+  PanelLeftOpenIcon, PlusIcon, RotateCcwIcon, ScanIcon, TriangleAlertIcon,
 } from "lucide-react";
 import type { Map as MapaML } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
@@ -256,14 +256,18 @@ function Escena({ ctx }: { ctx: Contexto }) {
     base.on("movestart", () => {
       if (!encuadrando) movido = true;
     });
-    base.on("mousemove", (ev) => {
+    const señalar = (ev: { point: { x: number; y: number } }) => {
       const i = mapa.celdaEn(ev.point.x, ev.point.y);
       if (i !== mapa.hover) {
         mapa.hover = i;
         mapa.dibujar();
       }
       setHover(i === null ? null : { i, x: ev.point.x, y: ev.point.y, ancho: caja.clientWidth });
-    });
+    };
+    base.on("mousemove", señalar);
+    // En celular no hay mouse: el toque hace las veces de pasar por encima, y
+    // tocar fuera de los hexágonos cierra el aviso.
+    base.on("click", señalar);
     base.on("mouseout", () => {
       mapa.hover = null;
       mapa.dibujar();
@@ -420,13 +424,16 @@ function Escena({ ctx }: { ctx: Contexto }) {
   return (
     <div className="flex min-h-dvh flex-col md:relative md:block md:h-dvh md:overflow-hidden">
       {/* --- Tarjeta: cifra, serie y explicación --- */}
-      {/* Flota sobre el mapa y entra y sale con un translate: el mapa no
-          cambia de tamaño, así que esconderla no lo mueve, solo destapa lo
-          que estaba debajo. El asa viaja con ella. */}
+      {/* En escritorio flota sobre el mapa y entra y sale con un translate: el
+          mapa no cambia de tamaño, así que esconderla no lo mueve, solo
+          destapa lo que estaba debajo, y el asa viaja con ella.
+          En celular va arriba del mapa y se pliega sobre su encabezado, para
+          que el título quede siempre a la vista. Las dos formas comparten el
+          mismo estado `tarjeta`. */}
       <aside
         ref={tarjetaRef}
         className={cn(
-          "order-2 md:absolute md:inset-y-0 md:left-0 md:z-30 md:w-[29rem]",
+          "order-1 md:absolute md:inset-y-0 md:left-0 md:z-30 md:w-[29rem]",
           "md:transition-transform md:duration-300 md:ease-out motion-reduce:md:transition-none",
           !tarjeta && "md:-translate-x-full",
         )}
@@ -446,7 +453,28 @@ function Escena({ ctx }: { ctx: Contexto }) {
               {/* El tamaño y el peso se suben a propósito: la tarjeta se lee
                   desde la última fila de la sala (docs/app_web.md). */}
               <CardTitle className="text-lg leading-tight font-bold">Accidentes viales en la Zona Metropolitana de Monterrey</CardTitle>
+              <CardAction className="md:hidden">
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label={tarjeta ? "Plegar el panel" : "Desplegar el panel"}
+                  onClick={() => setTarjeta((t) => !t)}
+                >
+                  {tarjeta ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                </Button>
+              </CardAction>
             </CardHeader>
+            {/* El cuerpo se pliega en celular con el truco de las filas de
+                grid (0fr → 1fr, que sí interpola). En escritorio el envoltorio
+                desaparece con `display: contents` y la tarjeta es la de
+                siempre. */}
+            <div
+              className={cn(
+                "grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none md:contents",
+                tarjeta ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+              )}
+            >
+              <div className="overflow-hidden md:contents">
             <Separator />
             <CardContent className="flex flex-1 flex-col gap-4">
               <div className="flex flex-col gap-1">
@@ -493,13 +521,15 @@ function Escena({ ctx }: { ctx: Contexto }) {
             <CardFooter className="py-2">
               <p className="text-xs text-muted-foreground">Modelo de accidentes reportados. ATUS-INEGI, 2019-2024.</p>
             </CardFooter>
+              </div>
+            </div>
           </Card>
         </div>
       </aside>
 
       {/* --- Mapa, con los controles flotando encima --- */}
-      <section className="relative order-1 flex flex-col md:absolute md:inset-0 md:order-none md:min-h-0">
-        <div ref={cajaRef} className="relative h-[85vw] max-h-[65vh] min-h-72 md:absolute md:inset-0 md:h-auto md:max-h-none">
+      <section className="relative order-2 flex flex-col md:absolute md:inset-0 md:order-none md:min-h-0">
+        <div ref={cajaRef} className="relative h-[62vh] min-h-80 md:absolute md:inset-0 md:h-auto md:min-h-0">
           {/* MapLibre le pone position: relative a su contenedor: por eso va
               dentro de otra caja absoluta. Ocultar las calles solo apaga su
               canvas; el mapa sigue recibiendo el zoom y el arrastre. */}
@@ -522,12 +552,14 @@ function Escena({ ctx }: { ctx: Contexto }) {
             size="sm"
             className="absolute top-3 right-3 z-10 flex flex-col items-center gap-1 bg-card/90 p-1.5 shadow-sm backdrop-blur-sm md:top-1/2 md:right-5 md:-translate-y-1/2"
           >
-            <BotonIcono etiqueta="Acercar (+)" variante="ghost" onClick={() => baseObj.current?.mapa.zoomIn()}>
-              <PlusIcon />
-            </BotonIcono>
-            <BotonIcono etiqueta="Alejar (−)" variante="ghost" onClick={() => baseObj.current?.mapa.zoomOut()}>
-              <MinusIcon />
-            </BotonIcono>
+            <div className="hidden md:contents">
+              <BotonIcono etiqueta="Acercar (+)" variante="ghost" onClick={() => baseObj.current?.mapa.zoomIn()}>
+                <PlusIcon />
+              </BotonIcono>
+              <BotonIcono etiqueta="Alejar (−)" variante="ghost" onClick={() => baseObj.current?.mapa.zoomOut()}>
+                <MinusIcon />
+              </BotonIcono>
+            </div>
             <BotonIcono etiqueta="Encuadrar la zona metropolitana (E)" variante="ghost" onClick={() => baseObj.current?.reencuadrar()}>
               <ScanIcon />
             </BotonIcono>
@@ -603,9 +635,11 @@ function Escena({ ctx }: { ctx: Contexto }) {
               <BookOpenIcon data-icon="inline-start" />
               Cómo leer esto
             </Button>
-            <BotonIcono etiqueta="Teclado (?)" onClick={() => despachar({ tipo: "ayuda" })}>
-              <KeyboardIcon />
-            </BotonIcono>
+            <div className="hidden md:block">
+              <BotonIcono etiqueta="Teclado (?)" onClick={() => despachar({ tipo: "ayuda" })}>
+                <KeyboardIcon />
+              </BotonIcono>
+            </div>
             <BotonIcono etiqueta="Volver al inicio (0)" onClick={() => despachar({ tipo: "reiniciar" })}>
               <RotateCcwIcon />
             </BotonIcono>

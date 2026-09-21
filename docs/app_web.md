@@ -36,8 +36,10 @@ del proyecto, pero se decidió hacerlo.
 De ahí se derivan las restricciones:
 
 - **Legibilidad de proyector.** Se lee desde la última fila: tipografía
-  grande, trazos gruesos, mucho contraste, pocos elementos por pantalla. En
-  celular basta con que se apile y funcione.
+  grande, trazos gruesos, mucho contraste, pocos elementos por pantalla.
+- **Celular (2026-09-20).** Dejó de bastar con que se apile: la app se
+  reparte por QR y la mayoría la va a abrir en el teléfono. Ver «En el
+  celular» más abajo.
 - **El operador es experto.** No hace falta proteger la interfaz de un
   desconocido con prisa; los controles pueden ser densos en información.
 - **Las transiciones se ven.** Cambiar de año o de lente se anima (~650 ms),
@@ -320,6 +322,43 @@ hexágonos · L cómo leer esto · 0/Esc volver al inicio. Mouse sobre
 un hexágono: sus cifras; rueda y arrastre: mover el mapa; clic en una columna
 de la serie: ese año. Todo lo del teclado tiene también botón en pantalla,
 salvo F y M.
+
+### En el celular
+
+Medido en un viewport de iPhone (390 × 844) con la app dentro de un iframe,
+que es la forma de probar la maqueta sin depender del tamaño de la ventana de
+Chrome:
+
+- **La tarjeta va arriba del mapa y se pliega.** En celular el `<aside>`
+  es el primer bloque (`order-1`) y lleva un botón en su `CardAction`
+  (`md:hidden`): plegada deja solo el encabezado —el rótulo y el título— en
+  127 px de alto; desplegada mide 543 px. El cuerpo se pliega con el truco de
+  `grid-template-rows: 1fr → 0fr`, que sí interpola en Chrome, y el
+  envoltorio desaparece en escritorio con `md:contents`, así que la tarjeta
+  de la sala no cambia. Las dos formas —plegar en celular, deslizar en
+  escritorio— comparten el estado `tarjeta`.
+- **El mapa ocupa el 62 % de la pantalla** (`h-[62vh] min-h-80`). Antes era
+  `h-[85vw] max-h-[65vh]`, que daba 322 px de 833: un 39 %, una rendija para
+  una app que es un mapa.
+- **Un toque enseña las cifras de la celda.** El tooltip colgaba solo de
+  `mousemove`; ahora el mismo manejador está en el `click` de MapLibre, que
+  sí responde al dedo, y tocar fuera de los hexágonos lo cierra.
+- **Los botones + y − no salen en celular** (`hidden md:contents`): ahí se
+  hace zoom con los dedos y solo comían mapa. Encuadrar, calles y opacidad se
+  quedan.
+- **El botón de la ayuda de teclado tampoco sale en celular**: no hay teclado
+  que consultar. Los atajos siguen vivos en escritorio, con `?`.
+- **Un dedo no mueve el mapa**: `cooperativeGestures` está activo en táctil
+  (un dedo desplaza la página, dos mueven el mapa), como en un mapa embebido
+  de Google. Es a propósito: sin eso, el mapa atrapa el dedo y no se puede
+  bajar a la gráfica. Quien presente tiene que decirlo en voz alta.
+- El orden en celular es: tarjeta (cifra y serie) → Accidentes/Riesgo →
+  mapa → años → Resaltar → leyenda. La página mide ~1,530 px, algo menos de
+  dos pantallas. **Con la tarjeta desplegada el mapa queda fuera de la
+  primera pantalla**; plegada empieza a 267 px del borde superior. Está
+  desplegada al arrancar, por decisión del autor: lo primero que se lee es
+  qué es esto y de dónde salen los datos.
+- Sin scroll horizontal en ningún estado.
 
 ### Mapa base
 

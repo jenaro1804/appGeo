@@ -142,7 +142,7 @@ export function TooltipCelda({ i, x, y, ancho, vista, modelo }: {
         ) : obs !== undefined ? (
           <>
             <span>
-              {vista.anio}: <b className="font-mono">{obs}</b> reportados
+              {vista.anio}: <b className="font-mono">{obs}</b> reportado{obs === 1 ? "" : "s"}
             </span>
             <span>modelo: {rango}</span>
           </>
