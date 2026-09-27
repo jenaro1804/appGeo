@@ -1,226 +1,231 @@
-# GeoStats — Accidentes de tránsito en México (ATUS, INEGI)
+# GeoStats — Road Traffic Accidents in Mexico (ATUS, INEGI)
 
-Análisis geoestadístico de los accidentes de tránsito urbanos y suburbanos
-registrados por el INEGI.
+*English · [Español](README.es.md)*
 
-## Estructura
+Geostatistical analysis of the urban and suburban road traffic accidents
+recorded by INEGI (Mexico's National Institute of Statistics and Geography).
+
+## Structure
 
 ```
-data/                  ← qué se versiona y qué no, abajo
-  raw/                 descargas del INEGI, tal cual llegaron; solo lectura
-    ATUS_2019..2024/   base georreferenciada anual (CSV + shapefile)
-    ATUS_anual_csv/    serie anual 1997-2025, sin coordenadas
+data/                  ← what is versioned and what isn't: see below
+  raw/                 INEGI downloads, exactly as they arrived; read-only
+    ATUS_2019..2024/   yearly georeferenced dataset (CSV + shapefile)
+    ATUS_anual_csv/    yearly series 1997-2025, no coordinates
     rativ_abierto_22-26.csv
-    _zips/             los comprimidos originales
-  processed/           lo que genera este repo; borrable y regenerable
-    atus_georreferenciado.parquet       nacional, 2019-2024
-    atus_zmm.parquet                    Zona Metropolitana de Monterrey
-    atus_zmm_limpio.parquet             la ZMM más 20 columnas derivadas
+    _zips/             the original archives
+  processed/           what this repo generates; safe to delete and rebuild
+    atus_georreferenciado.parquet       national, 2019-2024
+    atus_zmm.parquet                    Monterrey Metropolitan Area (ZMM)
+    atus_zmm_limpio.parquet             the ZMM plus 20 derived columns
 docs/
-  diccionario_de_datos.md   los 50 campos, sus catálogos y sus centinelas
-  seleccion_datos.md        qué columnas conservar y con qué papel
-  limpieza.md               las 20 derivadas, y lo que la limpieza no hace
-  *.pdf                     el render de cada notebook, para leer sin entorno
+  diccionario_de_datos.md   the 50 fields, their code lists and sentinel values
+  seleccion_datos.md        which columns to keep and what role each plays
+  limpieza.md               the 20 derived columns, and what cleaning does not do
+  *.pdf                     each notebook rendered, readable without an environment
 notebooks/
-  revisiones.ipynb              exploración
-  calidad_datos.qmd             reporte de faltantes (no modifica nada)
-  analisis_multivariado.qmd     covarianza, correlación, factorial y STL
+  revisiones.ipynb              exploration
+  calidad_datos.qmd             missing-data report (modifies nothing)
+  analisis_multivariado.qmd     covariance, correlation, factor analysis and STL
 src/geostats/
-  rutas.py             rutas del proyecto (nada de rutas relativas)
+  rutas.py             project paths (no relative paths anywhere)
   consolidar.py        raw/ATUS_20XX → processed/*.parquet
-  zonas.py             recortes geográficos (ZMM de Monterrey)
-  limpieza.py          columnas derivadas y validación; no borra ni imputa
+  zonas.py             geographic subsets (Monterrey ZMM)
+  limpieza.py          derived columns and validation; never drops or imputes
 ```
 
-La separación `raw/` vs `processed/` es la regla del proyecto: **nunca se
-escribe en `raw/`**. Si algo en `processed/` se corrompe, se borra y se
-regenera; si algo en `raw/` se pierde, hay que volver a bajarlo del INEGI.
+The `raw/` vs `processed/` split is the project's rule: **nothing is ever
+written to `raw/`**. If something in `processed/` gets corrupted, delete it and
+rebuild it; if something in `raw/` is lost, it has to be downloaded from INEGI
+again.
 
-**Qué se versiona.** `raw/` nunca: son ~5 GB de descargas del INEGI que se
-vuelven a bajar. De `processed/` sí van al repo las bases consolidadas
-(`atus_georreferenciado*`, `atus_zmm*`), para que un clon tenga datos sin
-repetir esa descarga. Los artefactos de limpieza (`*_limpio*`) quedan fuera: se
-regeneran en segundos con `uv run limpiar-atus`, y como Parquet es binario
-comprimido git no puede hacer delta — cada versión commiteada se guardaría
-entera y se quedaría en el historial para siempre.
+**What is versioned.** `raw/` never: it is ~5 GB of INEGI downloads that can be
+fetched again. From `processed/`, the consolidated datasets
+(`atus_georreferenciado*`, `atus_zmm*`) are committed, so a clone has data
+without repeating that download. The cleaning outputs (`*_limpio*`) are left
+out: they are rebuilt in seconds with `uv run limpiar-atus`, and since Parquet
+is compressed binary, git cannot store deltas — every committed version would
+be stored in full and stay in the history forever.
 
-## Preparar el entorno
+## Setting up the environment
 
 ```bash
 uv sync
 ```
 
-### Si `import geostats` falla
+### If `import geostats` fails
 
-Choque conocido entre uv y Python 3.14 en macOS: el `.pth` de la instalación
-editable queda con el flag `UF_HIDDEN`, y **Python 3.14 ignora en silencio los
-`.pth` ocultos**. Reaparece de forma intermitente, cuando uv reescribe ese
-archivo:
+Known clash between uv and Python 3.14 on macOS: the editable install's `.pth`
+file ends up with the `UF_HIDDEN` flag, and **Python 3.14 silently ignores
+hidden `.pth` files**. It comes back intermittently, whenever uv rewrites that
+file:
 
 ```bash
 chflags nohidden .venv/lib/python3.14/site-packages/*.pth
 ```
 
-El archivo `.env` de la raíz (`PYTHONPATH=src`) es la red de seguridad: VS Code
-lo aplica al kernel de Jupyter, así que los notebooks siguen funcionando aunque
-el `.pth` esté oculto. Por eso ese `.env` sí se versiona — no contiene secretos.
+The `.env` file at the root (`PYTHONPATH=src`) is the safety net: VS Code
+applies it to the Jupyter kernel, so the notebooks keep working even when the
+`.pth` is hidden. That is why this `.env` is versioned — it holds no secrets.
 
-## Los notebooks
+## Notebooks
 
-Van en **Quarto** (`.qmd`), no en `.ipynb`. El `.qmd` es texto plano: git puede
-hacer diff y merge de verdad, y el archivo no carga con las salidas embebidas
-que hacen ilegible el historial de un notebook de Jupyter.
+They are written in **Quarto** (`.qmd`), not `.ipynb`. A `.qmd` is plain text:
+git can actually diff and merge it, and the file does not carry the embedded
+outputs that make a Jupyter notebook's history unreadable.
 
 ```bash
-uv sync --group dev                        # nbclient y nbformat, que Quarto usa
+uv sync --group dev                        # nbclient and nbformat, used by Quarto
 quarto render notebooks/calidad_datos.qmd --to html
 ```
 
-Si `quarto` no encuentra el intérprete, apúntalo al del proyecto:
-`QUARTO_PYTHON=.venv/Scripts/python.exe` (Windows) o `.venv/bin/python`.
+If `quarto` cannot find the interpreter, point it to the project's:
+`QUARTO_PYTHON=.venv/Scripts/python.exe` (Windows) or `.venv/bin/python`.
 
-**Cada notebook tiene su PDF en `docs/`.** Se genera del HTML, porque en estas
-máquinas no hay LaTeX:
+**Every notebook has its PDF in `docs/`.** It is generated from the HTML,
+because these machines have no LaTeX:
 
 ```bash
 chrome --headless --no-pdf-header-footer   --print-to-pdf=docs/calidad_datos.pdf notebooks/calidad_datos.html
 ```
 
-El HTML intermedio y todo lo que Quarto deja en `notebooks/` está en
-`.gitignore`; al repo solo van el `.qmd` y el PDF de `docs/`.
+The intermediate HTML and everything Quarto leaves in `notebooks/` is in
+`.gitignore`; only the `.qmd` and the PDF in `docs/` go into the repo.
 
-## Reconstruir los datos procesados
+## Rebuilding the processed data
 
-Los datos crudos no están en el repo. Bajar de INEGI las bases ATUS
-georreferenciadas por año, descomprimirlas en `data/raw/ATUS_<año>/`, y correr:
+The raw data is not in the repo. Download the yearly georeferenced ATUS
+datasets from INEGI, unzip them into `data/raw/ATUS_<year>/`, and run:
 
 ```bash
-uv run consolidar-atus              # parquet tabular (31 MB)
-uv run consolidar-atus --geo        # además GeoParquet con geometría (43 MB)
-uv run consolidar-atus --verificar  # contrasta los .shp contra los CSV
+uv run consolidar-atus              # tabular parquet (31 MB)
+uv run consolidar-atus --geo        # also GeoParquet with geometry (43 MB)
+uv run consolidar-atus --verificar  # checks the .shp files against the CSVs
 ```
 
-Produce 1,317,810 filas × 50 columnas (2019-2024) en 31 MB de Parquet, contra
-219 MB de CSV.
+It produces 1,317,810 rows × 50 columns (2019-2024) in 31 MB of Parquet,
+versus 219 MB of CSV.
 
-### Recorte a la Zona Metropolitana de Monterrey
+### Subset to the Monterrey Metropolitan Area
 
 ```bash
 uv run zona-atus          # data/processed/atus_zmm.parquet
-uv run zona-atus --geo    # además el GeoParquet
+uv run zona-atus --geo    # also the GeoParquet
 ```
 
-379,294 registros (28.8 % del total nacional) en los 18 municipios de la ZMM
-según el Sistema Urbano Nacional. Agrega la columna `NOM_MUN`.
+379,294 records (28.8 % of the national total) in the 18 municipalities of the
+ZMM as defined by the National Urban System (Sistema Urbano Nacional). Adds the
+`NOM_MUN` column.
 
-**Esos 18 municipios son exactamente los únicos de Nuevo León que trae ATUS**:
-la cobertura estatal de la encuesta coincide con la zona metropolitana, así que
-filtrar por `EDO == 19` da el mismo resultado. `geostats.zonas` mantiene la lista
-explícita de todos modos, y falla si algún municipio de la zona no aparece en los
-datos, para que el recorte no dependa de esa coincidencia.
+**Those 18 municipalities are exactly the only ones from Nuevo León in ATUS**:
+the survey's state coverage matches the metropolitan area, so filtering by
+`EDO == 19` gives the same result. `geostats.zonas` keeps the explicit list
+anyway, and fails if any municipality of the area is missing from the data, so
+the subset does not depend on that coincidence.
 
-Ventaja sobre la base nacional: **el panel está balanceado**, los 18 municipios
-están presentes los seis años. Las series de tiempo de la ZMM sí son comparables
-entre años, cosa que a nivel nacional no ocurre (la cobertura va de 91 a 198
-municipios).
+Advantage over the national dataset: **the panel is balanced**, all 18
+municipalities are present in all six years. ZMM time series are comparable
+across years, which is not true nationally (coverage goes from 91 to 198
+municipalities).
 
-### Limpieza
+### Cleaning
 
 ```bash
 uv run limpiar-atus          # data/processed/atus_zmm_limpio.parquet (12 MB)
-uv run limpiar-atus --geo    # además el GeoParquet (15 MB)
+uv run limpiar-atus --geo    # also the GeoParquet (15 MB)
 ```
 
-Agrega 20 columnas derivadas a las 51 del recorte, y **nunca borra filas ni
-imputa**. No es estilo: el faltante de esta base es MNAR —en accidentes fatales
-el aliento alcohólico se ignora 2.4 veces más seguido que en los de solo daños—,
-así que `dropna()` sesga contra los accidentes graves e imputar bajo supuesto
-MAR mete sesgo en silencio. Si la etapa no puede borrar ni imputar, ninguna de
-las dos cosas puede pasar por descuido más adelante.
+Adds 20 derived columns to the 51 of the subset, and **never drops rows or
+imputes**. This is not a matter of style: missingness in this dataset is MNAR —
+in fatal accidents the breathalyzer result is unknown 2.4 times more often than
+in property-damage-only ones — so `dropna()` biases against severe accidents,
+and imputing under a MAR assumption silently introduces bias. If this stage
+cannot drop or impute, neither can happen by accident further down the line.
 
-Convención: **mayúsculas** es lo que llegó del INEGI y no se toca, incluidos los
-códigos centinela; **minúsculas** es lo que construye este repo. Así en cualquier
-`groupby` se sabe de un vistazo de dónde viene el dato.
+Convention: **UPPERCASE** is what came from INEGI and is left untouched,
+sentinel codes included; **lowercase** is what this repo builds. That way, in
+any `groupby`, you can tell at a glance where the data comes from.
 
-`validar()` recorre 21 invariantes y falla con la lista completa de las que se
-rompan; `diagnostico()` imprime las doce cifras que cambian la lectura del
-análisis. El detalle de cada columna está en [`docs/limpieza.md`](docs/limpieza.md).
+`validar()` checks 21 invariants and fails with the full list of those that
+break; `diagnostico()` prints the twelve figures that change how the analysis
+reads. The detail of each column is in [`docs/limpieza.md`](docs/limpieza.md).
 
-> Las coordenadas traen **hasta ocho decimales**, no seis como sugiere el
-> ejemplo del diccionario. Formatearlas a seis fusiona 8,115 puntos distintos en
-> silencio, así que `id_punto` no usa formato fijo y una invariante lo comprueba
-> en cada corrida.
+> Coordinates come with **up to eight decimal places**, not six as the data
+> dictionary's example suggests. Formatting them to six silently merges 8,115
+> distinct points, so `id_punto` does not use a fixed format, and an invariant
+> checks it on every run.
 
-### Por qué no se consolidan los shapefiles
+### Why the shapefiles are not consolidated
 
-Los `.shp` traen los mismos registros que los CSV. `--verificar` lo comprueba
-año por año: coinciden las 1,317,810 filas por la llave `(ANIO, EDO, MPIO, ID)`,
-sin sobrantes de ningún lado, y la geometría del shapefile es **idéntica** a las
-columnas `LONGITUD`/`LATITUD` (desfase máximo: 0.0 grados en los seis años).
+The `.shp` files hold the same records as the CSVs. `--verificar` checks it year
+by year: all 1,317,810 rows match on the key `(ANIO, EDO, MPIO, ID)`, with no
+leftovers on either side, and the shapefile geometry is **identical** to the
+`LONGITUD`/`LATITUD` columns (maximum offset: 0.0 degrees across all six years).
 
-Por eso `--geo` construye la geometría desde esas columnas en vez de releer 5 GB
-de shapefiles: el resultado es el mismo punto por punto. Ojo: en 2019-2023 el
-orden de las filas difiere entre `.shp` y CSV, así que compararlos por posición
-da resultados sin sentido — hay que unirlos por la llave.
+That is why `--geo` builds the geometry from those columns instead of re-reading
+5 GB of shapefiles: the result is the same, point by point. Watch out: in
+2019-2023 the row order differs between `.shp` and CSV, so comparing them by
+position gives meaningless results — they must be joined on the key.
 
-## Identidad visual en las gráficas
+## Visual identity in charts
 
-Las gráficas siguen el manual de GeoStats, pero los colores de marca están
-pensados para impresión y no todos sirven como marcas de datos sobre fondo
-claro. Se validaron antes de usarlos (banda de luminosidad OKLCH 0.43–0.77,
-piso de croma 0.10, separación bajo simulación de daltonismo, contraste WCAG):
+Charts follow the GeoStats brand manual, but the brand colors were designed for
+print and not all of them work as data marks on a light background. They were
+validated before use (OKLCH lightness band 0.43–0.77, chroma floor 0.10,
+separation under color-blindness simulation, WCAG contrast):
 
-| Color de marca | Uso en gráficas | Resultado |
+| Brand color | Use in charts | Result |
 |---|---|---|
-| Azul Prusia `#003153` | datos | **No pasa**: L=0.304 (banda 0.43–0.77) y croma 0.078 (piso 0.10, lee como gris). Se conserva el tono 246° y se sube L a 0.45 → `#005991` |
-| Rojo profundo `#8B2C1A` | títulos, énfasis | Pasa sin cambios (L=0.434, croma 0.133) |
-| Rojo óxido `#B15E2E` | detalle cálido | Pasa sin cambios (L=0.571, croma 0.124) |
-| Gris grafito `#2C2C2C` | texto, ejes | Croma 0 — correcto para texto, nunca como serie |
-| Gris claro `#F2F2F2` | rejilla, fondos | — |
+| Prussian Blue `#003153` | data | **Fails**: L=0.304 (band 0.43–0.77) and chroma 0.078 (floor 0.10, reads as gray). The 246° hue is kept and L is raised to 0.45 → `#005991` |
+| Deep Red `#8B2C1A` | titles, emphasis | Passes unchanged (L=0.434, chroma 0.133) |
+| Rust Red `#B15E2E` | warm accent | Passes unchanged (L=0.571, chroma 0.124) |
+| Graphite Gray `#2C2C2C` | text, axes | Chroma 0 — right for text, never as a series |
+| Light Gray `#F2F2F2` | gridlines, backgrounds | — |
 
-**Los dos rojos nunca van como series contiguas:** entre sí quedan en ΔE 14.1
-sobre un piso de 15, así que un lector con visión de color plena no los
-distingue bien lado a lado.
+**The two reds are never used as adjacent series:** they are ΔE 14.1 apart
+against a floor of 15, so a reader with full color vision cannot tell them
+apart well side by side.
 
-Como la marca solo aporta un tono de datos, las gráficas con más de dos series
-usan **paneles pequeños** (una serie por panel) o la **rampa ordinal** de Azul
-Prusia `#005991 → #1b77b8 → #4195d9` cuando la dimensión tiene orden, en vez de
-inventar colores fuera del manual.
+Since the brand provides only one data hue, charts with more than two series use
+**small multiples** (one series per panel) or the Prussian Blue **ordinal
+ramp** `#005991 → #1b77b8 → #4195d9` when the dimension is ordered, instead of
+inventing colors outside the manual.
 
-Tipografías: Montserrat (títulos), Cormorant Garamond (texto), Roboto Mono
-(cifras). No están instaladas en el sistema, así que matplotlib usa respaldos.
-Para el renderizado exacto:
+Typefaces: Montserrat (titles), Cormorant Garamond (body), Roboto Mono
+(figures). They are not installed on the system, so matplotlib uses fallbacks.
+For exact rendering:
 
 ```bash
 brew install --cask font-montserrat font-cormorant-garamond font-roboto-mono
 ```
 
-## Notas sobre los datos
+## Notes on the data
 
-El significado de cada campo, sus catálogos de códigos y sus valores centinela
-están en [`docs/diccionario_de_datos.md`](docs/diccionario_de_datos.md), que
-consolida los tres diccionarios del INEGI y los contrasta contra los datos.
+The meaning of each field, its code lists and its sentinel values are in
+[`docs/diccionario_de_datos.md`](docs/diccionario_de_datos.md) (in Spanish),
+which consolidates INEGI's three data dictionaries and checks them against the
+data.
 
-Tres cosas que no son obvias y que rompen el análisis si se ignoran:
+Three non-obvious things that break the analysis if ignored:
 
-**Encoding: CP1252 con respaldo, no lo que diga `chardet`.** Sobre estos
-archivos chardet reporta `CP874`/`TIS-620` con confianza `0.00`, porque apenas
-~1 de cada 250 bytes es no-ASCII. El `.cpg` del INEGI declara CP1252 y tiene
-razón: en el rango `0x80-0x9F` CP1252 pone guiones y comillas tipográficas que
-`latin-1` convierte en caracteres de control (719 caracteres mal leídos, en
-silencio). Pero 740 bytes del origen caen en los cinco huecos que CP1252 no
-define. `consolidar` registra un manejador de errores que lee esos cinco bytes
-con semántica latin-1: texto correcto y cero bytes perdidos (ningún U+FFFD).
+**Encoding: CP1252 with a fallback, not whatever `chardet` says.** On these
+files chardet reports `CP874`/`TIS-620` with confidence `0.00`, because barely
+~1 in 250 bytes is non-ASCII. INEGI's `.cpg` declares CP1252 and it is right: in
+the `0x80-0x9F` range CP1252 maps dashes and typographic quotes that `latin-1`
+turns into control characters (719 characters misread, silently). But 740 bytes
+in the source fall into the five gaps CP1252 leaves undefined. `consolidar`
+registers an error handler that reads those five bytes with latin-1 semantics:
+correct text and zero bytes lost (no U+FFFD).
 
-**`ID` no es llave única.** En 2019-2020 es un folio consecutivo *por
-municipio* y se repite 268,920 veces; desde 2021 es un identificador compuesto.
-La llave real es `(ANIO, EDO, MPIO, ID)`. `consolidar` lo valida y falla si no
-se cumple.
+**`ID` is not a unique key.** In 2019-2020 it is a sequential number *per
+municipality* and repeats 268,920 times; from 2021 on it is a composite
+identifier. The real key is `(ANIO, EDO, MPIO, ID)`. `consolidar` validates it
+and fails if it does not hold.
 
-**La cobertura crece: el panel está desbalanceado.** De 91 municipios en 2019 a
-198 en 2024. El salto de +52% en accidentes entre 2020 y 2021 es en buena parte
-*más municipios medidos*, no más accidentes. Cualquier serie de tiempo hay que
-normalizarla (tasa por municipio, o restringir al panel balanceado).
+**Coverage grows: the panel is unbalanced.** From 91 municipalities in 2019 to
+198 in 2024. The +52% jump in accidents between 2020 and 2021 is largely *more
+municipalities being measured*, not more accidents. Any time series has to be
+normalized (rate per municipality, or restricted to the balanced panel).
 
-`consolidar` agrega `CVE_MUN` (2 dígitos de estado + 3 de municipio), que es la
-llave para unir con el marco geoestadístico del INEGI.
+`consolidar` adds `CVE_MUN` (2-digit state + 3-digit municipality code), which
+is the key for joining with INEGI's geostatistical framework.
